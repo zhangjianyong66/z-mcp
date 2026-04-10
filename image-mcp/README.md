@@ -1,47 +1,36 @@
 # z-mcp image server
 
-一个个人使用的 MCP image server。首版只提供一个图片内容识别工具，当前支持：
-
-- `openai-compatible`
-- `anthropic-compatible`
+一个个人使用的 MCP image server。当前提供一个图片生成工具，基于阿里云百炼 `qwen-image` 同步接口。
 
 ## 功能
 
-- `describe_image`
-  - 输入图片 URL、本地图片路径，或 `data:image/...` 格式的 data URL
-  - 调用在线多模态模型理解图片
-  - 返回结构化结果：`summary`、`objects`、`scene`、`visible_text`、`confidence`
+- `generate_image`
+  - 输入文本提示词生成图片
+  - 支持可选参数：`model`、`size`、`n`、`negative_prompt`、`watermark`
+  - 返回百炼生成的临时图片 URL 列表
 
 ## 环境变量
 
 复制 `.env.example` 为 `.env` 并配置：
 
 ```bash
-LLM_API_STYLE=openai-compatible
-LLM_API_KEY=your_api_key
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4.1-mini
+DASHSCOPE_API_KEY=your_api_key
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com
+DASHSCOPE_MODEL=qwen-image
 ```
 
 说明：
 
-- `LLM_API_STYLE` 支持 `openai-compatible` 和 `anthropic-compatible`
-- `LLM_BASE_URL` 支持任何对应协议的兼容服务
-- 如果你用的是 DashScope / OpenRouter / 其他 OpenAI-compatible 端点，只需要改 `LLM_BASE_URL` 和模型名
+- `DASHSCOPE_API_KEY` 为首选鉴权变量
+- `LLM_API_KEY` 和 `LLM_MODEL` 仍可作为兼容兜底
+- `DASHSCOPE_BASE_URL` 默认值是 `https://dashscope.aliyuncs.com`
 - 代码启动时会自动读取项目根目录下的 `.env`
-- 仍兼容 `OPENAI_*` 和 `ANTHROPIC_*` 变量名
 
-## Anthropic-compatible 说明
+## 接口说明
 
-Anthropic-compatible 路径会调用 `POST /v1/messages`。
-
-注意：
-
-- 这表示 server 现在支持 Anthropic 协议兼容
-- 但并不代表所有 Anthropic-compatible provider 都支持图片输入
-- 对于 MiniMax 的 Anthropic-compatible 配置，当前会直接返回明确错误，因为该兼容接口目前不支持 image blocks
-
-如果你要做图片识别，优先使用支持视觉输入的 OpenAI-compatible provider。
+- 工具内部调用百炼同步接口 `POST /api/v1/services/aigc/multimodal-generation/generation`
+- 当前只实现 `qwen-image` 同步生图
+- 返回的图片 URL 为百炼临时地址，通常有时效，不会自动下载到本地
 
 ## 安装
 
@@ -72,30 +61,9 @@ npm run build
       "command": "node",
       "args": ["/absolute/path/to/z-mcp/image-mcp/dist/index.js"],
       "env": {
-        "LLM_API_STYLE": "openai-compatible",
-        "LLM_API_KEY": "your_api_key",
-        "LLM_BASE_URL": "https://api.openai.com/v1",
-        "LLM_MODEL": "gpt-4.1-mini"
-      }
-    }
-  }
-}
-```
-
-Anthropic-compatible 示例：
-
-```json
-{
-  "mcpServers": {
-    "image": {
-      "command": "node",
-      "args": ["/absolute/path/to/z-mcp/image-mcp/dist/index.js"],
-      "env": {
-        "LLM_API_STYLE": "anthropic-compatible",
-        "LLM_API_KEY": "your_api_key",
-        "LLM_BASE_URL": "https://api.anthropic.com",
-        "LLM_MODEL": "claude-3-7-sonnet-latest",
-        "ANTHROPIC_VERSION": "2023-06-01"
+        "DASHSCOPE_API_KEY": "your_api_key",
+        "DASHSCOPE_BASE_URL": "https://dashscope.aliyuncs.com",
+        "DASHSCOPE_MODEL": "qwen-image"
       }
     }
   }
@@ -106,7 +74,9 @@ Anthropic-compatible 示例：
 
 ```json
 {
-  "image": "/absolute/path/to/demo.png",
-  "prompt": "请识别图片中的主体、场景和可见文字"
+  "prompt": "一只橘猫坐在木质窗台上，午后阳光，电影感摄影",
+  "size": "1024*1024",
+  "n": 1,
+  "watermark": false
 }
 ```

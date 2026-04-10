@@ -6,8 +6,8 @@
 
 - `image-mcp`
   - 图片相关能力
-  - 首版提供 `describe_image` 工具，用于图片内容识别
-  - 底层通过 OpenAI-compatible 多模态接口完成图像理解
+  - 当前提供 `generate_image` 工具，用于图片生成
+  - 底层通过阿里云百炼 `qwen-image` 同步接口生成图片
 
 ## 目录结构
 
@@ -25,8 +25,8 @@ z-mcp/
 
 功能：
 
-- 支持图片 URL、本地文件路径、`data:image/...` 输入
-- 返回结构化识别结果：`summary`、`objects`、`scene`、`visible_text`、`confidence`
+- 支持通过提示词生成图片
+- 返回百炼生成的临时图片 URL
 
 模块说明见 [image-mcp/README.md](./image-mcp/README.md)。
 
