@@ -1,12 +1,17 @@
 # z-mcp image server
 
-一个个人使用的 MCP image server。当前提供一个图片生成工具，基于阿里云百炼 `qwen-image` 同步接口。
+一个个人使用的 MCP image server。当前提供纯文本生图和参考图生图工具，基于阿里云百炼 `qwen-image` 同步接口。
 
 ## 功能
 
 - `generate_image`
   - 输入文本提示词生成图片
-  - 支持可选参数：`model`、`size`、`n`、`negative_prompt`、`watermark`
+  - 支持可选参数：`size`、`n`、`negative_prompt`、`watermark`
+  - 返回百炼生成的临时图片 URL 列表
+- `edit_image`
+  - 输入 `1-3` 张参考图和文本提示词，生成继承参考图风格的新图片
+  - 参考图支持公网 URL、本地文件路径和 `data:image/...`
+  - 支持可选参数：`size`、`n`、`negative_prompt`、`watermark`
   - 返回百炼生成的临时图片 URL 列表
 
 ## 环境变量
@@ -16,7 +21,7 @@
 ```bash
 DASHSCOPE_API_KEY=your_api_key
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com
-DASHSCOPE_MODEL=qwen-image
+DASHSCOPE_MODEL=qwen-image-2.0-pro
 ```
 
 说明：
@@ -29,7 +34,9 @@ DASHSCOPE_MODEL=qwen-image
 ## 接口说明
 
 - 工具内部调用百炼同步接口 `POST /api/v1/services/aigc/multimodal-generation/generation`
-- 当前只实现 `qwen-image` 同步生图
+- 当前实现：
+  - `generate_image`：纯文本生图
+  - `edit_image`：参考图风格迁移 / 图生图
 - 返回的图片 URL 为百炼临时地址，通常有时效，不会自动下载到本地
 
 ## 安装
@@ -63,7 +70,7 @@ npm run build
       "env": {
         "DASHSCOPE_API_KEY": "your_api_key",
         "DASHSCOPE_BASE_URL": "https://dashscope.aliyuncs.com",
-        "DASHSCOPE_MODEL": "qwen-image"
+        "DASHSCOPE_MODEL": "qwen-image-2.0-pro"
       }
     }
   }
@@ -78,5 +85,18 @@ npm run build
   "size": "1024*1024",
   "n": 1,
   "watermark": false
+}
+```
+
+`edit_image` 示例：
+
+```json
+{
+  "prompt": "参考这张图的插画风格，生成一只站在海边的柴犬，保留相似的色调和笔触",
+  "images": [
+    "/absolute/path/to/reference.png"
+  ],
+  "size": "1024*1024",
+  "n": 1
 }
 ```
