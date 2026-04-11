@@ -1,6 +1,6 @@
 # z-mcp search server
 
-一个个人使用的 MCP search server。当前提供统一的 `web_search` 工具，通过参数选择搜索 provider，不做多源聚合。
+一个个人使用的 MCP search server。当前提供通用搜索工具 `web_search`，以及固定热点聚合工具 `finance_hotnews`。
 
 ## 功能
 
@@ -9,6 +9,11 @@
   - 支持 provider：`aliyun`、`baidu`、`ddg`
   - 支持可选参数：`provider`、`limit`、`timeout`
   - 未传 `provider` 时默认使用 `aliyun`
+- `finance_hotnews`
+  - 返回当前财经热点新闻的结构化结果
+  - 优先使用财经站点直抓，结果不足时回退到现有 search providers
+  - 支持可选参数：`limit`、`timeout`、`include_sectors`、`search_fallback`
+  - 不生成 Markdown 报告、不写本地文件
 
 ## 环境变量
 
@@ -79,6 +84,16 @@ npm run build
 }
 ```
 
+财经热点示例：
+
+```json
+{
+  "limit": 10,
+  "include_sectors": true,
+  "search_fallback": true
+}
+```
+
 百度示例：
 
 ```json
@@ -114,5 +129,47 @@ DuckDuckGo 示例：
       "provider": "ddg"
     }
   ]
+}
+```
+
+`finance_hotnews` 返回结构示例：
+
+```json
+{
+  "generatedAt": "2026-04-12T03:30:00.000Z",
+  "count": 2,
+  "news": [
+    {
+      "title": "示例财经热点",
+      "url": "https://example.com/news/1",
+      "snippet": "示例摘要",
+      "source": "新浪财经",
+      "type": "direct"
+    },
+    {
+      "title": "示例搜索补充",
+      "url": "https://example.com/news/2",
+      "snippet": "示例搜索摘要",
+      "source": "ddg",
+      "type": "search"
+    }
+  ],
+  "sourceStats": {
+    "direct": 1,
+    "search": 1
+  },
+  "hotSectors": [
+    {
+      "name": "AI",
+      "score": 2
+    }
+  ],
+  "partialFailures": [
+    {
+      "source": "baidu",
+      "message": "baidu search failed: Missing required environment variable for baidu provider: BAIDU_API_KEY"
+    }
+  ],
+  "queryMode": "fixed-hotnews"
 }
 ```
