@@ -8,13 +8,18 @@
   - 图片相关能力
   - 当前提供纯文本生图和参考图生图工具
   - 底层通过阿里云百炼 `qwen-image` 同步接口生成图片
+- `search-mcp`
+  - 联网搜索能力
+  - 通过参数选择 `aliyun`、`baidu`、`ddg` 搜索 provider
+  - 返回统一结构化搜索结果
 
 ## 目录结构
 
 ```text
 z-mcp/
 ├── README.md
-└── image-mcp/
+├── image-mcp/
+└── search-mcp/
 ```
 
 ## 已有模块
@@ -31,12 +36,14 @@ z-mcp/
 
 模块说明见 [image-mcp/README.md](./image-mcp/README.md)。
 
-## 后续扩展建议
+### search-mcp
 
-后面可以继续按同样结构增加新模块，例如：
+路径：`search-mcp/`
 
-- `text-mcp`
-- `search-mcp`
-- `browser-mcp`
+功能：
 
-每个模块保持独立的 `package.json`、源码和说明文档，根目录只负责聚合和导航。
+- 支持通过统一工具 `web_search` 进行联网搜索
+- 调用时可选择 `aliyun`、`baidu`、`ddg` provider
+- 不做多源聚合，返回统一结构化结果
+
+模块说明见 [search-mcp/README.md](./search-mcp/README.md)。
