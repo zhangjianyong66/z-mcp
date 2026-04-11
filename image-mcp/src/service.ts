@@ -1,8 +1,15 @@
-import { resolveProviderChain } from "./config.js";
+import { resolveProviderChain, resolveVisionProviderChain } from "./config.js";
 import { executeWithFallback } from "./executor.js";
 import { resolveImageInput } from "./image-input.js";
-import { editWithDashScope, generateWithDashScope } from "./providers/dashscope.js";
-import type { GenerationResult, ImageEditInput, ImageGenerationInput, ImageProviderConfig } from "./types.js";
+import { analyzeWithDashScope, editWithDashScope, generateWithDashScope } from "./providers/dashscope.js";
+import type {
+  GenerationResult,
+  ImageEditInput,
+  ImageGenerationInput,
+  ImageProviderConfig,
+  VisionAnalysisInput,
+  VisionAnalysisResult
+} from "./types.js";
 
 function assertDashScope(config: ImageProviderConfig): ImageProviderConfig {
   if (config.provider !== "dashscope") {
@@ -29,5 +36,16 @@ export async function editImage(input: ImageEditInput): Promise<GenerationResult
     chain,
     input,
     executor: async ({ config, input: request }) => editWithDashScope(assertDashScope(config), request, resolvedImages)
+  });
+}
+
+export async function analyzeImage(input: VisionAnalysisInput): Promise<VisionAnalysisResult> {
+  const resolvedImages = await Promise.all(input.images.map((image) => resolveImageInput(image)));
+  const chain = resolveVisionProviderChain();
+
+  return executeWithFallback({
+    chain,
+    input,
+    executor: async ({ config, input: request }) => analyzeWithDashScope(assertDashScope(config), request, resolvedImages)
   });
 }

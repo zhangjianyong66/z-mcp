@@ -30,6 +30,15 @@ export type GenerationResult = {
   attempts: ProviderAttempt[];
 };
 
+export type VisionAnalysisResult = {
+  model: string;
+  provider: ImageProvider;
+  prompt: string;
+  answer: string;
+  requestId?: string;
+  attempts: ProviderAttempt[];
+};
+
 export type ProviderExecutionError = {
   retryable: boolean;
   status: string;
@@ -55,6 +64,11 @@ export type ImageGenerationInput = {
 };
 
 export type ImageEditInput = ImageGenerationInput & {
+  images: string[];
+};
+
+export type VisionAnalysisInput = {
+  prompt: string;
   images: string[];
 };
 

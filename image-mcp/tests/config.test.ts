@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveProviderChain } from "../src/config.js";
+import { resolveProviderChain, resolveVisionProviderChain } from "../src/config.js";
 
 test("resolveProviderChain parses IMAGE_MODEL_CHAIN in priority order", () => {
   const chain = resolveProviderChain({
@@ -61,5 +61,65 @@ test("resolveProviderChain rejects invalid IMAGE_MODEL_CHAIN payloads", () => {
   assert.throws(
     () => resolveProviderChain({ IMAGE_MODEL_CHAIN: "[]" }),
     /IMAGE_MODEL_CHAIN must contain at least one provider config/
+  );
+});
+
+test("resolveVisionProviderChain parses VISION_MODEL_CHAIN in priority order", () => {
+  const chain = resolveVisionProviderChain({
+    VISION_MODEL_CHAIN: JSON.stringify([
+      {
+        provider: "dashscope",
+        model: "vision-a",
+        apiKey: "vision-key-a",
+        baseURL: "https://vision.example.com/"
+      },
+      {
+        provider: "dashscope",
+        model: "vision-b",
+        apiKey: "vision-key-b"
+      }
+    ])
+  });
+
+  assert.deepEqual(chain, [
+    {
+      provider: "dashscope",
+      model: "vision-a",
+      apiKey: "vision-key-a",
+      baseURL: "https://vision.example.com"
+    },
+    {
+      provider: "dashscope",
+      model: "vision-b",
+      apiKey: "vision-key-b",
+      baseURL: "https://dashscope.aliyuncs.com"
+    }
+  ]);
+});
+
+test("resolveVisionProviderChain falls back to dedicated single-model env vars", () => {
+  const chain = resolveVisionProviderChain({
+    VISION_API_KEY: "vision-key",
+    VISION_BASE_URL: "https://vision.example.com/",
+    VISION_MODEL: "qwen-vl-max"
+  });
+
+  assert.deepEqual(chain, [
+    {
+      provider: "dashscope",
+      model: "qwen-vl-max",
+      apiKey: "vision-key",
+      baseURL: "https://vision.example.com"
+    }
+  ]);
+});
+
+test("resolveVisionProviderChain requires a vision model when no chain is configured", () => {
+  assert.throws(
+    () =>
+      resolveVisionProviderChain({
+        VISION_API_KEY: "vision-key"
+      }),
+    /Missing required environment variable: VISION_MODEL/
   );
 });

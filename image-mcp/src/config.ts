@@ -17,6 +17,14 @@ function normalizeBaseURL(baseURL: string): string {
   return baseURL.replace(/\/+$/, "");
 }
 
+type ChainParseOptions = {
+  chainVar: string;
+  apiKeyVars: string[];
+  baseURLVars: string[];
+  modelVars: string[];
+  defaultModel?: string;
+};
+
 function parseChainEntry(entry: unknown, index: number): ImageProviderConfig {
   if (!entry || typeof entry !== "object") {
     throw new Error(`IMAGE_MODEL_CHAIN item at index ${index} must be an object`);
@@ -49,23 +57,38 @@ function parseChainEntry(entry: unknown, index: number): ImageProviderConfig {
 }
 
 function resolveLegacyConfig(source: EnvSource): ImageProviderConfig {
-  const apiKey = readEnv(source, "DASHSCOPE_API_KEY", "LLM_API_KEY");
+  return resolveLegacyConfigByOptions(source, {
+    chainVar: "IMAGE_MODEL_CHAIN",
+    apiKeyVars: ["DASHSCOPE_API_KEY", "LLM_API_KEY"],
+    baseURLVars: ["DASHSCOPE_BASE_URL", "LLM_BASE_URL"],
+    modelVars: ["DASHSCOPE_MODEL", "LLM_MODEL"],
+    defaultModel: DEFAULT_MODEL
+  });
+}
+
+function resolveLegacyConfigByOptions(source: EnvSource, options: ChainParseOptions): ImageProviderConfig {
+  const apiKey = readEnv(source, ...options.apiKeyVars);
   if (!apiKey) {
-    throw new Error("Missing required environment variable: DASHSCOPE_API_KEY or LLM_API_KEY");
+    throw new Error(`Missing required environment variable: ${options.apiKeyVars.join(" or ")}`);
+  }
+
+  const model = readEnv(source, ...options.modelVars) ?? options.defaultModel;
+  if (!model) {
+    throw new Error(`Missing required environment variable: ${options.modelVars.join(" or ")}`);
   }
 
   return {
     provider: "dashscope",
     apiKey,
-    baseURL: normalizeBaseURL(readEnv(source, "DASHSCOPE_BASE_URL", "LLM_BASE_URL") ?? DEFAULT_DASHSCOPE_BASE_URL),
-    model: readEnv(source, "DASHSCOPE_MODEL", "LLM_MODEL") ?? DEFAULT_MODEL
+    baseURL: normalizeBaseURL(readEnv(source, ...options.baseURLVars) ?? DEFAULT_DASHSCOPE_BASE_URL),
+    model
   };
 }
 
-export function resolveProviderChain(source: EnvSource = process.env): ImageProviderConfig[] {
-  const serializedChain = readEnv(source, "IMAGE_MODEL_CHAIN");
+function resolveProviderChainByOptions(source: EnvSource, options: ChainParseOptions): ImageProviderConfig[] {
+  const serializedChain = readEnv(source, options.chainVar);
   if (!serializedChain) {
-    return [resolveLegacyConfig(source)];
+    return [resolveLegacyConfigByOptions(source, options)];
   }
 
   let parsed: unknown;
@@ -73,16 +96,35 @@ export function resolveProviderChain(source: EnvSource = process.env): ImageProv
     parsed = JSON.parse(serializedChain);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`IMAGE_MODEL_CHAIN must be valid JSON: ${message}`);
+    throw new Error(`${options.chainVar} must be valid JSON: ${message}`);
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error("IMAGE_MODEL_CHAIN must be a JSON array");
+    throw new Error(`${options.chainVar} must be a JSON array`);
   }
 
   if (parsed.length === 0) {
-    throw new Error("IMAGE_MODEL_CHAIN must contain at least one provider config");
+    throw new Error(`${options.chainVar} must contain at least one provider config`);
   }
 
   return parsed.map((entry, index) => parseChainEntry(entry, index));
+}
+
+export function resolveProviderChain(source: EnvSource = process.env): ImageProviderConfig[] {
+  return resolveProviderChainByOptions(source, {
+    chainVar: "IMAGE_MODEL_CHAIN",
+    apiKeyVars: ["DASHSCOPE_API_KEY", "LLM_API_KEY"],
+    baseURLVars: ["DASHSCOPE_BASE_URL", "LLM_BASE_URL"],
+    modelVars: ["DASHSCOPE_MODEL", "LLM_MODEL"],
+    defaultModel: DEFAULT_MODEL
+  });
+}
+
+export function resolveVisionProviderChain(source: EnvSource = process.env): ImageProviderConfig[] {
+  return resolveProviderChainByOptions(source, {
+    chainVar: "VISION_MODEL_CHAIN",
+    apiKeyVars: ["VISION_API_KEY", "DASHSCOPE_API_KEY", "LLM_API_KEY"],
+    baseURLVars: ["VISION_BASE_URL", "DASHSCOPE_BASE_URL", "LLM_BASE_URL"],
+    modelVars: ["VISION_MODEL"],
+  });
 }

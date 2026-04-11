@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { editImage, generateImage } from "./service.js";
+import { analyzeImage, editImage, generateImage } from "./service.js";
 
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,6 +36,34 @@ server.tool(
   async ({ prompt, size, n, negative_prompt, watermark }) => {
     try {
       const result = await generateImage({ prompt, size, n, negative_prompt, watermark });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "analyze_image",
+  "Analyze 1-3 images with a natural-language question and return a text answer.",
+  {
+    prompt: z.string().min(1).describe("Question or instruction for analyzing the provided images."),
+    images: z
+      .array(z.string().min(1))
+      .min(1)
+      .max(3)
+      .describe("1-3 images in order. Supports remote URLs, local file paths, and data URLs.")
+  },
+  async ({ prompt, images }) => {
+    try {
+      const result = await analyzeImage({ prompt, images });
       return {
         content: [
           {

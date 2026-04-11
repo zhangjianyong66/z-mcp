@@ -1,6 +1,6 @@
 # z-mcp image server
 
-一个个人使用的 MCP image server。当前提供纯文本生图和参考图生图工具，基于阿里云百炼 `qwen-image` 同步接口。参考图生图想要稳定保留风格和主体特征时，必须提供详细提示词。
+一个个人使用的 MCP image server。当前提供纯文本生图、参考图生图和图片理解工具，基于阿里云百炼多模态同步接口。参考图生图想要稳定保留风格和主体特征时，必须提供详细提示词。
 
 ## 功能
 
@@ -15,6 +15,11 @@
   - 提示词必须明确写出每张图的职责、保留特征和排除项
   - 支持可选参数：`size`、`n`、`negative_prompt`、`watermark`
   - 返回百炼生成的临时图片 URL 列表
+- `analyze_image`
+  - 输入 `1-3` 张图片和一个自然语言问题/分析指令
+  - 图片支持公网 URL、本地文件路径和 `data:image/...`
+  - 适用于图片描述、元素识别、截图理解、双图对比等通用视觉问答场景
+  - 返回自然语言分析结果
 
 ## 环境变量
 
@@ -45,13 +50,44 @@ IMAGE_MODEL_CHAIN='[
 ]'
 ```
 
+图片理解工具使用独立视觉模型配置：
+
+```bash
+VISION_API_KEY=your_api_key
+VISION_BASE_URL=https://dashscope.aliyuncs.com
+VISION_MODEL=your_vision_model
+```
+
+如需为图片理解单独配置多模型回退链：
+
+```bash
+VISION_MODEL_CHAIN='[
+  {
+    "provider": "dashscope",
+    "apiKey": "your_primary_key",
+    "baseURL": "https://dashscope.aliyuncs.com",
+    "model": "your_primary_vision_model"
+  },
+  {
+    "provider": "dashscope",
+    "apiKey": "your_secondary_key",
+    "baseURL": "https://dashscope.aliyuncs.com",
+    "model": "your_secondary_vision_model"
+  }
+]'
+```
+
 说明：
 
 - `IMAGE_MODEL_CHAIN` 存在时优先使用，按数组顺序尝试候选模型
+- `VISION_MODEL_CHAIN` 存在时优先用于 `analyze_image`
 - `DASHSCOPE_API_KEY` 为首选鉴权变量
+- `VISION_API_KEY` 用于图片理解；未设置时会回退到 `DASHSCOPE_API_KEY` / `LLM_API_KEY`
 - `LLM_API_KEY` 和 `LLM_MODEL` 仍可作为兼容兜底
 - `DASHSCOPE_BASE_URL` 默认值是 `https://dashscope.aliyuncs.com`
+- `VISION_BASE_URL` 未配置时会回退到 `DASHSCOPE_BASE_URL` / `LLM_BASE_URL`
 - `IMAGE_MODEL_CHAIN` 未配置时，服务会退回到单模型兼容模式
+- `VISION_MODEL_CHAIN` 未配置时，`analyze_image` 会使用 `VISION_MODEL`
 - 代码启动时会自动读取项目根目录下的 `.env`
 
 ## 接口说明
@@ -60,9 +96,11 @@ IMAGE_MODEL_CHAIN='[
 - 当前实现：
   - `generate_image`：纯文本生图
   - `edit_image`：参考图风格迁移 / 图生图
+  - `analyze_image`：通用图片理解 / 视觉问答
 - 返回的图片 URL 为百炼临时地址，通常有时效，不会自动下载到本地
 - `edit_image` 没有独立的风格权重或主体权重参数，效果主要依赖参考图顺序和详细提示词
 - `edit_image` 更准确地说是“参考融合工具”，不是“风格图/主体图硬隔离工具”
+- `analyze_image` 第一版返回自然语言分析结果，不提供目标框、区域坐标或严格 OCR 结构化 schema
 
 ## 自动回退规则
 
@@ -112,6 +150,24 @@ IMAGE_MODEL_CHAIN='[
 - `attempts` 按真实尝试顺序返回
 - 成功时最后一项一定是 `success`
 - 如果所有候选都失败，工具会返回聚合错误摘要，而不是只返回最后一次失败
+
+`analyze_image` 成功结果示例：
+
+```json
+{
+  "provider": "dashscope",
+  "model": "your_vision_model",
+  "prompt": "请比较两张图的主要差异。",
+  "answer": "第一张图是室外街景，第二张图是室内办公场景。两张图在光线、主体和背景布局上明显不同。",
+  "attempts": [
+    {
+      "provider": "dashscope",
+      "model": "your_vision_model",
+      "status": "success"
+    }
+  ]
+}
+```
 
 ## 如何正确使用 `edit_image`
 
@@ -187,6 +243,25 @@ npm run build
 }
 ```
 
+如果你还要启用图片理解，可以在同一个 MCP server 配置里增加视觉模型环境变量：
+
+```json
+{
+  "mcpServers": {
+    "image": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/image-mcp/dist/index.js"],
+      "env": {
+        "DASHSCOPE_API_KEY": "your_image_api_key",
+        "DASHSCOPE_MODEL": "qwen-image-2.0-pro",
+        "VISION_API_KEY": "your_vision_api_key",
+        "VISION_MODEL": "your_vision_model"
+      }
+    }
+  }
+}
+```
+
 ## 工具输入示例
 
 ```json
@@ -256,3 +331,39 @@ npm run build
 - “按这两张图生成一张新的”
 - 只给图片，不说明谁控制风格、谁控制主体
 - 用两张都带强风格噪音的图，却要求模型只取其中一张的画风
+
+## `analyze_image` 示例
+
+单图理解：
+
+```json
+{
+  "prompt": "请描述这张图片里的主体、场景和大致氛围。",
+  "images": [
+    "/absolute/path/to/reference.png"
+  ]
+}
+```
+
+双图对比：
+
+```json
+{
+  "prompt": "请比较这两张图在主体、环境和风格上的主要差异。",
+  "images": [
+    "/absolute/path/to/image-a.png",
+    "/absolute/path/to/image-b.png"
+  ]
+}
+```
+
+截图理解：
+
+```json
+{
+  "prompt": "这是一个应用截图。请概括它当前页面的功能，并指出界面里最重要的操作区域。",
+  "images": [
+    "/absolute/path/to/screenshot.png"
+  ]
+}
+```
