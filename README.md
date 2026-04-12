@@ -12,6 +12,10 @@
   - 联网搜索能力
   - 通过参数选择 `aliyun`、`baidu`、`ddg` 搜索 provider
   - 返回统一结构化搜索结果
+- `stock-data-mcp`
+  - ETF 数据能力
+  - 当前提供 ETF 最新行情、历史 K 线、技术分析和 ETF 列表工具
+  - provider 包括 `eastmoney` 与 `xueqiu`
 
 ## 目录结构
 
@@ -19,7 +23,8 @@
 z-mcp/
 ├── README.md
 ├── image-mcp/
-└── search-mcp/
+├── search-mcp/
+└── stock-data-mcp/
 ```
 
 ## 已有模块
@@ -48,3 +53,16 @@ z-mcp/
 - 不做多源聚合，返回统一结构化结果
 
 模块说明见 [search-mcp/README.md](./search-mcp/README.md)。
+
+### stock-data-mcp
+
+路径：`stock-data-mcp/`
+
+功能：
+
+- 支持通过 `etf_quote` 获取 ETF 最新行情
+- 支持通过 `etf_kline` 获取 ETF 日 K 数据
+- 支持通过 `etf_analyze` 获取 ETF 技术分析
+- 支持通过 `etf_list` 获取 ETF 列表
+
+模块说明见 [stock-data-mcp/README.md](./stock-data-mcp/README.md)。
