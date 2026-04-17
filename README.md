@@ -15,7 +15,18 @@
 - `stock-data-mcp`
   - ETF 数据能力
   - 当前提供 ETF 最新行情、历史 K 线、技术分析和 ETF 列表工具
-  - provider 包括 `eastmoney` 与 `xueqiu`
+  - provider 包括 `eastmoney` 与 `xueqiu`，其中 `etf_list` 默认解析东财 `fund_etf` 网格页数据，并支持 `eastmoney` / `sse` 自动回退，返回中会带 `sourceUrl` 和 `sourceQuery`
+- `mcp-cli`
+  - MCP 协议调试与冒烟测试工具
+  - 方便列出 tools、调用 tool、查看 server capabilities
+- `playwright-tools`
+  - 独立的 Playwright 浏览器自动化工具包
+  - 方便打开页面、抓取快照、保存截图和复用浏览器配置
+- `xiaohongshu-mcp`
+  - 小红书 MCP 服务
+  - 作为 Git 子模块接入，路径为 `xiaohongshu-mcp/`
+
+模块说明见 [mcp-cli/README.md](./mcp-cli/README.md)。
 
 ## 目录结构
 
@@ -24,7 +35,10 @@ z-mcp/
 ├── README.md
 ├── image-mcp/
 ├── search-mcp/
-└── stock-data-mcp/
+├── stock-data-mcp/
+├── mcp-cli/
+├── playwright-tools/
+└── xiaohongshu-mcp/
 ```
 
 ## 已有模块
@@ -66,3 +80,27 @@ z-mcp/
 - 支持通过 `etf_list` 获取 ETF 列表
 
 模块说明见 [stock-data-mcp/README.md](./stock-data-mcp/README.md)。
+
+### playwright-tools
+
+路径：`playwright-tools/`
+
+功能：
+
+- 提供可复用的 Playwright 浏览器封装
+- 支持打开页面、抓取文本和 HTML 快照
+- 支持保存截图和统一配置浏览器参数
+
+模块说明见 [playwright-tools/README.md](./playwright-tools/README.md)。
+
+### xiaohongshu-mcp
+
+路径：`xiaohongshu-mcp/`
+
+功能：
+
+- 小红书 MCP 服务
+- 提供搜索、浏览、发布等小红书相关能力
+- 作为独立 Git 子模块维护
+
+模块说明见 [xiaohongshu-mcp/README.md](./xiaohongshu-mcp/README.md)。
