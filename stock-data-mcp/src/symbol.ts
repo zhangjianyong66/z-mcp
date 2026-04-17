@@ -73,8 +73,14 @@ export function normalizeEtfKlineInput(
 }
 
 export function normalizeEtfListInput(input: EtfListInput = {}): NormalizedEtfListInput {
+  const pageSize = input.pageSize ?? input.limit ?? DEFAULT_LIST_LIMIT;
   return {
-    limit: clamp(input.limit ?? DEFAULT_LIST_LIMIT, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
+    page: clamp(input.page ?? 1, 1, Number.MAX_SAFE_INTEGER),
+    limit: clamp(pageSize, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
+    pageSize: clamp(pageSize, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
+    sortBy: input.sortBy ?? "gainers",
+    fetchAll: input.fetchAll ?? false,
+    source: input.source ?? "auto",
     timeoutMs: normalizeTimeoutSeconds(input.timeout) * 1000
   };
 }

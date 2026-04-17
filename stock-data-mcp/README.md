@@ -19,7 +19,15 @@
   - 默认 provider：`xueqiu`
 - `etf_list`
   - 获取 ETF 列表
-  - 当前固定使用 `eastmoney`
+  - 默认按涨幅从高到低排序，也可以切换到跌幅、成交量、成交额、换手率排序
+  - 支持分页和 `fetchAll=true` 全量拉取
+  - `limit` 是兼容旧调用的别名，等同于 `pageSize`
+  - 返回更完整的列表字段，包括 `open`、`high`、`low`、`prevClose`、`turnoverRate`、`peRatio`、`pbRatio`、`totalMarketValue` 等信息
+  - 默认优先解析东财 `fund_etf` 网格页对应的数据，失败时自动回退到上交所 `SSE` 官方列表接口
+  - 也可以显式指定 `source=auto|eastmoney|sse`
+  - `SSE` 路径会额外返回 `fundAbbr`、`fundExpansionAbbr`、`companyName`、`companyCode`、`indexName`、`listingDate`、`category`、`scale`
+  - 返回里会附带 `sourceUrl`，方便你直接回到对应页面核对数据
+  - 还会附带 `sourceQuery`，便于调试当前列表请求的分页和排序参数
 
 ## 环境变量
 
@@ -37,6 +45,8 @@ XUEQIU_USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 - 未配置 `XUEQIU_COOKIE` 时，server 会尝试使用 Playwright 无头访问雪球并自动获取 Cookie
 - 如果自动获取失败，错误信息会提示安装或初始化 Playwright 浏览器
 - 代码启动时会自动读取模块目录下的 `.env`
+- 日志默认写到 `/tmp/openclaw/stock-data-mcp.log`
+- 如果需要改路径，可以设置 `STOCK_DATA_MCP_LOG_FILE=/your/path/stock-data-mcp.log`
 
 ## 安装
 
@@ -108,7 +118,11 @@ npm run build
 
 ```json
 {
-  "limit": 20
+  "page": 1,
+  "pageSize": 20,
+  "sortBy": "gainers",
+  "fetchAll": false,
+  "source": "auto"
 }
 ```
 
@@ -123,6 +137,9 @@ npm run build
   "data": {
     "symbol": "159930",
     "name": "能源ETF",
+    "market": "SZ",
+    "normalizedSymbol": "SZ159930",
+    "secid": "0.159930",
     "price": 1.234,
     "changePercent": 1.56,
     "changeAmount": 0.02,
@@ -131,7 +148,16 @@ npm run build
     "low": 1.2,
     "prevClose": 1.214,
     "volume": 12345678,
-    "amount": 45678901
+    "amount": 45678901,
+    "turnoverRate": 0.82,
+    "volumeRatio": 1.13,
+    "amplitude": 2.44,
+    "peRatio": 14.2,
+    "pbRatio": 1.67,
+    "totalMarketValue": 1234567890,
+    "circulationMarketValue": 987654321,
+    "change60d": 8.13,
+    "changeYtd": 14.9
   }
 }
 ```
@@ -141,5 +167,19 @@ npm run build
 - `quote`
 - `indicators`
 - `recentKlines`
+
+`etf_list` 返回：
+
+- `sortBy`
+- `fetchAll`
+- `page`
+- `pageSize`
+- `limit`
+- `sourceUrl`
+- `sourceQuery`
+- `total`
+- `count`
+- `hasMore`
+- `data`
 
 第一版不提供自动降级、多市场个股能力、持久缓存或报告生成。
