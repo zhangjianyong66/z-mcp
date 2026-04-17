@@ -1,0 +1,21 @@
+{
+  "name": "z-mcp-playwright-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable Playwright browser tooling for local web automation and scraping.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx src/main.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
