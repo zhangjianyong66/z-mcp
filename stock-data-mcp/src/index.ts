@@ -94,7 +94,7 @@ const etfListSortSchema = z.enum(["gainers", "losers", "volume", "amount", "turn
 
 server.tool(
   "etf_quote",
-  "Fetch the latest ETF quote. Supports symbols like 159930, 510300, SZ159930, and SH510300.",
+  "获取最新 ETF 行情。支持 159930、510300、SZ159930、SH510300 等代码格式。",
   {
     symbol: z.string().min(1).describe("ETF symbol such as 159930 or SZ159930."),
     source: providerSchema.optional().describe("Optional provider. Defaults to eastmoney."),
@@ -121,7 +121,7 @@ server.tool(
 
 server.tool(
   "etf_kline",
-  "Fetch historical ETF daily kline data.",
+  "获取 ETF 历史日 K 线数据。",
   {
     symbol: z.string().min(1).describe("ETF symbol such as 159930 or SH510300."),
     source: providerSchema.optional().describe("Optional provider. Defaults to eastmoney."),
@@ -149,7 +149,7 @@ server.tool(
 
 server.tool(
   "etf_analyze",
-  "Analyze an ETF with MA5, MA10, MA20, 30-day high/low, and a simple trend label.",
+  "分析 ETF，包含 MA5、MA10、MA20、30 日高低点及简单趋势标签。",
   {
     symbol: z.string().min(1).describe("ETF symbol such as 159930 or SZ159930."),
     source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
@@ -177,7 +177,7 @@ server.tool(
 
 server.tool(
   "etf_list",
-  "List ETFs by parsing the Eastmoney fund ETF grid page, with selectable sorting, paging, optional full fetch, and auto fallback from eastmoney to SSE.",
+  "解析东方财富基金 ETF 列表页面获取 ETF 列表，支持可选排序、分页、全量拉取，并在东方财富异常时自动回退到上海证券交易所。",
   {
     limit: z.number().int().min(1).max(100).optional().describe("Legacy alias for pageSize. Defaults to 20."),
     page: z.number().int().min(1).optional().describe("Optional page number. Defaults to 1."),

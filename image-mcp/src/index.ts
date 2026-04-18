@@ -25,7 +25,7 @@ const server = new McpServer({
 
 server.tool(
   "generate_image",
-  "Generate images with DashScope qwen-image and return temporary image URLs.",
+  "使用 DashScope qwen-image 生成图片，并返回临时图片 URL。",
   {
     prompt: z.string().min(1).describe("Prompt used to generate the image."),
     size: z.string().min(1).optional().describe("Optional output size, such as 1024*1024."),
@@ -52,7 +52,7 @@ server.tool(
 
 server.tool(
   "analyze_image",
-  "Analyze 1-3 images with a natural-language question and return a text answer.",
+  "使用自然语言问题分析 1-3 张图片，并返回文本答案。",
   {
     prompt: z.string().min(1).describe("Question or instruction for analyzing the provided images."),
     images: z
@@ -80,7 +80,7 @@ server.tool(
 
 server.tool(
   "edit_image",
-  "Generate images from 1-3 reference images. This is a reference-fusion tool, not a hard style/subject separation tool. For style transfer, prefer one style reference image plus a detailed text description of the new subject. When using multiple references, describe each image's role explicitly, but do not assume strict isolation between them.",
+  "基于 1-3 张参考图生成图片。这是参考融合工具，不是严格的风格/主体分离工具。风格迁移时，建议使用一张风格参考图并配合详细的新主体文字描述。使用多张参考图时，请明确描述每张图的角色，但不要假设它们之间有严格的隔离。",
   {
     prompt: z
       .string()

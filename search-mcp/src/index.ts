@@ -28,7 +28,7 @@ const server = new McpServer({
 
 server.tool(
   "web_search",
-  "Search the web with a selected provider. Supported providers are aliyun, baidu, and ddg. When provider is omitted, aliyun is used by default.",
+  "使用选定的搜索提供商进行网页搜索。支持的提供商有 aliyun、baidu 和 ddg。未指定提供商时，默认使用 aliyun。",
   {
     query: z.string().min(1).describe("Search query."),
     provider: z
@@ -60,7 +60,7 @@ server.tool(
 
 server.tool(
   "finance_hotnews",
-  "Fetch current finance hot news with direct-source priority and search-provider fallback. Returns structured JSON without side effects.",
+  "获取当前财经热闻，优先使用直接来源，不足时回退到搜索提供商。返回结构化 JSON，无副作用。",
   {
     limit: z.number().int().min(1).max(30).optional().describe("Optional max hot news count. Defaults to 15."),
     timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 30."),
