@@ -22,6 +22,9 @@
 - `playwright-tools`
   - 独立的 Playwright 浏览器自动化工具包
   - 方便打开页面、抓取快照、保存截图和复用浏览器配置
+- `feishu-mcp`
+  - 飞书群聊管理能力
+  - 提供建群、改名、解散、成员管理、群查询与成员查询工具
 - `xiaohongshu-mcp`
   - 小红书 MCP 服务
   - 作为 Git 子模块接入，路径为 `xiaohongshu-mcp/`
@@ -38,6 +41,7 @@ z-mcp/
 ├── stock-data-mcp/
 ├── mcp-cli/
 ├── playwright-tools/
+├── feishu-mcp/
 └── xiaohongshu-mcp/
 ```
 
@@ -92,6 +96,19 @@ z-mcp/
 - 支持保存截图和统一配置浏览器参数
 
 模块说明见 [playwright-tools/README.md](./playwright-tools/README.md)。
+
+### feishu-mcp
+
+路径：`feishu-mcp/`
+
+功能：
+
+- 支持通过 `create_chat` 创建飞书群聊
+- 支持通过 `rename_chat`、`delete_chat` 管理群基础信息
+- 支持通过 `add_chat_members`、`remove_chat_members` 管理成员
+- 支持通过 `list_chats`、`get_chat`、`list_chat_members` 查询群与成员
+
+模块说明见 [feishu-mcp/README.md](./feishu-mcp/README.md)。
 
 ### xiaohongshu-mcp
 
