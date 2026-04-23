@@ -1,4 +1,4 @@
-import { getFeishuConfig, parseTimeoutMs } from "./config.js";
+import { getFeishuConfig, parseTimeoutMs, resolveAppConfigForAgent } from "./config.js";
 export class FeishuApiError extends Error {
     status;
     code;
@@ -23,7 +23,7 @@ export class FeishuClient {
         this.appSecret = options?.appSecret ?? config.appSecret;
         this.baseURL = options?.baseURL ?? config.baseURL;
         this.defaultTimeoutMs = options?.timeoutMs ?? config.timeoutMs;
-        this.fetcher = options?.fetcher ?? fetch;
+        this.fetcher = options?.fetcher ?? ((input, init) => fetch(input, init));
     }
     async createChat(payload, timeoutSeconds) {
         return this.requestWithAuth("POST", "/open-apis/im/v1/chats", payload, timeoutSeconds);
@@ -122,6 +122,23 @@ export class FeishuClient {
         }
         return envelope;
     }
+}
+const clientCache = new Map();
+export function clearClientCache() {
+    clientCache.clear();
+}
+export function getFeishuClient(agentId) {
+    const cacheKey = agentId?.trim() || "default";
+    if (!clientCache.has(cacheKey)) {
+        const config = resolveAppConfigForAgent(agentId);
+        clientCache.set(cacheKey, new FeishuClient({
+            appId: config.appId,
+            appSecret: config.appSecret,
+            baseURL: config.baseURL,
+            timeoutMs: config.timeoutMs
+        }));
+    }
+    return clientCache.get(cacheKey);
 }
 function getFeishuConfigSafe(options) {
     try {

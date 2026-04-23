@@ -37,14 +37,16 @@ const server = new McpServer({
     name: "feishu-mcp",
     version: "0.1.0"
 });
-server.tool("create_chat", "创建飞书群聊。若配置 FEISHU_DEFAULT_MEMBER_OPEN_ID，会自动把该用户加入群成员。", {
+server.tool("create_chat", "创建飞书群聊。agent_id 用于匹配应用（FEISHU_AGENT_APP_MAP）和默认成员（FEISHU_AGENT_MEMBER_MAP）。user_open_id 是当前用户的 open_id，Agent 应从会话数据中解析后传入。", {
     name: z.string().min(1).describe("Chat name."),
     description: z.string().optional().describe("Optional chat description."),
-    user_id_list: z.array(z.string().min(1)).optional().describe("Optional open_id list. Will merge with default member when configured."),
+    user_id_list: z.array(z.string().min(1)).optional().describe("Optional open_id list of other users to add."),
+    user_open_id: z.string().min(1).describe("Current user's open_id for this agent's Feishu app. Agent must pass its own user's open_id parsed from session data."),
+    agent_id: z.string().min(1).describe("Required agent identifier (e.g. main, coder, squirrel, pencil). Used to look up app credentials from FEISHU_AGENT_APP_MAP and default member from FEISHU_AGENT_MEMBER_MAP."),
     timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds.")
-}, async ({ name, description, user_id_list, timeout }) => {
+}, async ({ name, description, user_id_list, user_open_id, agent_id, timeout }) => {
     try {
-        const result = await runCreateChat({ name, description, user_id_list, timeout });
+        const result = await runCreateChat({ name, description, user_id_list, user_open_id, agent_id, timeout });
         return {
             content: [
                 {

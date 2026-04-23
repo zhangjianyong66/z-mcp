@@ -1,14 +1,9 @@
-import { getDefaultMemberOpenId, normalizePageInput } from "./config.js";
-import { FeishuClient } from "./client.js";
+import { normalizePageInput, resolveDefaultMemberForAgent } from "./config.js";
+import { getFeishuClient } from "./client.js";
 import type { ToolResult } from "./types.js";
 
-let client: FeishuClient | undefined;
-
-function getClient(): FeishuClient {
-  if (!client) {
-    client = new FeishuClient();
-  }
-  return client;
+function getClient(agentId?: string) {
+  return getFeishuClient(agentId);
 }
 
 function buildResult<T>(tool: string, data: T): ToolResult<T> {
@@ -42,6 +37,8 @@ export async function runCreateChat(input: {
   name: string;
   description?: string;
   user_id_list?: string[];
+  user_open_id: string;
+  agent_id: string;
   timeout?: number;
 }): Promise<ToolResult<unknown>> {
   const name = input.name.trim();
@@ -49,15 +46,25 @@ export async function runCreateChat(input: {
     throw new Error("name cannot be empty");
   }
 
+  const agentId = input.agent_id.trim();
+  if (!agentId) {
+    throw new Error("agent_id is required");
+  }
+
+  const userOpenId = input.user_open_id.trim();
+  if (!userOpenId) {
+    throw new Error("user_open_id is required");
+  }
+
   const description = input.description?.trim() || undefined;
   const explicitUserIds = input.user_id_list ? normalizeUserIds(input.user_id_list) : [];
-  const defaultMember = getDefaultMemberOpenId();
-  const mergedUserIds = defaultMember
-    ? normalizeUserIds([...explicitUserIds, defaultMember])
-    : explicitUserIds;
+
+  const allUserIds = [...explicitUserIds, userOpenId];
+
+  const mergedUserIds = normalizeUserIds(allUserIds);
   const userIds = mergedUserIds.length > 0 ? mergedUserIds : undefined;
 
-  const response = await getClient().createChat(
+  const response = await getClient(agentId).createChat(
     {
       name,
       description,

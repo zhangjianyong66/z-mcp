@@ -48,3 +48,78 @@ export function getFeishuConfig() {
 export function getDefaultMemberOpenId() {
     return readEnv("FEISHU_DEFAULT_MEMBER_OPEN_ID");
 }
+export function getAgentMemberMap() {
+    const raw = readEnv("FEISHU_AGENT_MEMBER_MAP");
+    if (!raw) {
+        return {};
+    }
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return {};
+        }
+        const result = {};
+        for (const [key, value] of Object.entries(parsed)) {
+            if (typeof value === "string" && value.trim()) {
+                result[key.trim()] = value.trim();
+            }
+        }
+        return result;
+    }
+    catch {
+        return {};
+    }
+}
+export function resolveDefaultMemberForAgent(agentId) {
+    if (agentId) {
+        const map = getAgentMemberMap();
+        const mapped = map[agentId.trim()];
+        if (mapped) {
+            return mapped;
+        }
+    }
+    return getDefaultMemberOpenId();
+}
+export function getAgentAppMap() {
+    const raw = readEnv("FEISHU_AGENT_APP_MAP");
+    if (!raw) {
+        return {};
+    }
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return {};
+        }
+        const result = {};
+        for (const [key, value] of Object.entries(parsed)) {
+            if (value && typeof value === "object" && !Array.isArray(value)) {
+                const v = value;
+                const appId = typeof v.app_id === "string" ? v.app_id.trim() : "";
+                const appSecret = typeof v.app_secret === "string" ? v.app_secret.trim() : "";
+                if (appId && appSecret) {
+                    result[key.trim()] = { appId, appSecret };
+                }
+            }
+        }
+        return result;
+    }
+    catch {
+        return {};
+    }
+}
+export function resolveAppConfigForAgent(agentId) {
+    const baseConfig = getFeishuConfig();
+    if (agentId) {
+        const map = getAgentAppMap();
+        const mapped = map[agentId.trim()];
+        if (mapped) {
+            return {
+                appId: mapped.appId,
+                appSecret: mapped.appSecret,
+                baseURL: baseConfig.baseURL,
+                timeoutMs: baseConfig.timeoutMs
+            };
+        }
+    }
+    return baseConfig;
+}

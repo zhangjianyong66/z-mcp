@@ -13,6 +13,11 @@ export type FeishuConfig = {
   timeoutMs: number;
 };
 
+export type FeishuAppCredentials = {
+  appId: string;
+  appSecret: string;
+};
+
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
@@ -64,4 +69,81 @@ export function getFeishuConfig(): FeishuConfig {
 
 export function getDefaultMemberOpenId(): string | undefined {
   return readEnv("FEISHU_DEFAULT_MEMBER_OPEN_ID");
+}
+
+export function getAgentMemberMap(): Record<string, string> {
+  const raw = readEnv("FEISHU_AGENT_MEMBER_MAP");
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string" && value.trim()) {
+        result[key.trim()] = value.trim();
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+export function resolveDefaultMemberForAgent(agentId?: string): string | undefined {
+  if (agentId) {
+    const map = getAgentMemberMap();
+    const mapped = map[agentId.trim()];
+    if (mapped) {
+      return mapped;
+    }
+  }
+  return getDefaultMemberOpenId();
+}
+
+export function getAgentAppMap(): Record<string, FeishuAppCredentials> {
+  const raw = readEnv("FEISHU_AGENT_APP_MAP");
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: Record<string, FeishuAppCredentials> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const v = value as Record<string, unknown>;
+        const appId = typeof v.app_id === "string" ? v.app_id.trim() : "";
+        const appSecret = typeof v.app_secret === "string" ? v.app_secret.trim() : "";
+        if (appId && appSecret) {
+          result[key.trim()] = { appId, appSecret };
+        }
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+export function resolveAppConfigForAgent(agentId?: string): FeishuConfig {
+  const baseConfig = getFeishuConfig();
+  if (agentId) {
+    const map = getAgentAppMap();
+    const mapped = map[agentId.trim()];
+    if (mapped) {
+      return {
+        appId: mapped.appId,
+        appSecret: mapped.appSecret,
+        baseURL: baseConfig.baseURL,
+        timeoutMs: baseConfig.timeoutMs
+      };
+    }
+  }
+  return baseConfig;
 }
