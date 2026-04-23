@@ -40,6 +40,10 @@ function scaledPrice(value: unknown): number | null {
   return typeof value === "number" ? value / 100 : null;
 }
 
+function scaledQuotePrice(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value / 1000 : null;
+}
+
 function scaledAmount(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
@@ -112,13 +116,13 @@ export function mapEastmoneyQuote(data: Record<string, unknown>, symbol: string)
   return {
     symbol,
     name: typeof data.f58 === "string" ? data.f58 : undefined,
-    price: scaledPrice(data.f43),
+    price: scaledQuotePrice(data.f43),
     changePercent: scaledPrice(data.f170),
-    changeAmount: scaledPrice(data.f169),
-    open: scaledPrice(data.f46),
-    high: scaledPrice(data.f44),
-    low: scaledPrice(data.f45),
-    prevClose: scaledPrice(data.f60),
+    changeAmount: scaledQuotePrice(data.f169),
+    open: scaledQuotePrice(data.f46),
+    high: scaledQuotePrice(data.f44),
+    low: scaledQuotePrice(data.f45),
+    prevClose: scaledQuotePrice(data.f60),
     volume: scaledAmount(data.f47),
     amount: scaledAmount(data.f48),
     turnoverRate: typeof data.f168 === "number" ? data.f168 / 100 : null

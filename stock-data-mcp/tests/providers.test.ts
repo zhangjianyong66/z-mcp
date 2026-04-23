@@ -21,13 +21,13 @@ test("mapEastmoneyQuote scales quote fields", () => {
   const quote = mapEastmoneyQuote(
     {
       f58: "能源ETF",
-      f43: 123,
-      f170: 145,
-      f169: 12,
-      f46: 120,
-      f44: 130,
-      f45: 118,
-      f60: 111,
+      f43: 4757,
+      f170: 38,
+      f169: 18,
+      f46: 4735,
+      f44: 4777,
+      f45: 4728,
+      f60: 4739,
       f47: 999,
       f48: 888
     },
@@ -35,9 +35,9 @@ test("mapEastmoneyQuote scales quote fields", () => {
   );
 
   assert.equal(quote.name, "能源ETF");
-  assert.equal(quote.price, 1.23);
-  assert.equal(quote.changePercent, 1.45);
-  assert.equal(quote.changeAmount, 0.12);
+  assert.equal(quote.price, 4.757);
+  assert.equal(quote.changePercent, 0.38);
+  assert.equal(quote.changeAmount, 0.018);
 });
 
 test("parseEastmoneyKlines maps CSV rows", () => {

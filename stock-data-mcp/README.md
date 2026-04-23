@@ -1,6 +1,6 @@
 # z-mcp stock data server
 
-一个个人使用的 MCP ETF 数据 server。当前只聚焦 ETF，提供最新行情、历史 K 线、技术分析和 ETF 列表四个工具。
+一个个人使用的 MCP 股票数据 server。当前提供 ETF 行情工具和行业板块汇总工具。
 
 ## 功能
 
@@ -28,6 +28,12 @@
   - `SSE` 路径会额外返回 `fundAbbr`、`fundExpansionAbbr`、`companyName`、`companyCode`、`indexName`、`listingDate`、`category`、`scale`
   - 返回里会附带 `sourceUrl`，方便你直接回到对应页面核对数据
   - 还会附带 `sourceQuery`，便于调试当前列表请求的分页和排序参数
+- `sector_list`
+  - 获取同花顺行业板块汇总
+  - 支持 `sortBy=gainers|losers|hot`
+  - `hot` 使用新闻热度与行情热度混合评分
+  - 支持分页，`limit` 兼容为 `pageSize` 别名
+  - 数据源：`AkShare stock_board_industry_summary_ths`
 
 ## 环境变量
 
@@ -47,12 +53,15 @@ XUEQIU_USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 - 代码启动时会自动读取模块目录下的 `.env`
 - 日志默认写到 `/tmp/openclaw/stock-data-mcp.log`
 - 如果需要改路径，可以设置 `STOCK_DATA_MCP_LOG_FILE=/your/path/stock-data-mcp.log`
+- `sector_list` 依赖本机 `python3` 和 `akshare` 包
+- 如需自定义脚本位置，可设置 `AKSHARE_SECTOR_SCRIPT_PATH`
 
 ## 安装
 
 ```bash
 npm install
 npx playwright install chromium
+python3 -m pip install akshare
 ```
 
 ## 开发
@@ -126,6 +135,17 @@ npm run build
 }
 ```
 
+`sector_list`:
+
+```json
+{
+  "page": 1,
+  "pageSize": 20,
+  "sortBy": "hot",
+  "timeout": 20
+}
+```
+
 ## 返回结构示例
 
 ```json
@@ -180,6 +200,18 @@ npm run build
 - `total`
 - `count`
 - `hasMore`
+- `data`
+
+`sector_list` 返回：
+
+- `source`
+- `sortBy`
+- `page`
+- `pageSize`
+- `total`
+- `count`
+- `hasMore`
+- `newsScoreDegraded`
 - `data`
 
 第一版不提供自动降级、多市场个股能力、持久缓存或报告生成。

@@ -1,12 +1,19 @@
 import { formatProviderError } from "./config.js";
 import { logStockDataEvent } from "./logging.js";
+import { createAkshareProvider } from "./providers/akshare.js";
 import { createEastmoneyProvider } from "./providers/eastmoney.js";
 import { createSseProvider } from "./providers/sse.js";
 import { createXueqiuProvider } from "./providers/xueqiu.js";
 import {
+  calculateMarketScores,
+  calculateNewsScores,
+  fetchFinanceNewsTitles
+} from "./sector-hotness.js";
+import {
   normalizeEtfInput,
   normalizeEtfKlineInput,
-  normalizeEtfListInput
+  normalizeEtfListInput,
+  normalizeSectorListInput
 } from "./symbol.js";
 import type {
   EtfAnalyzeResponse,
@@ -20,6 +27,11 @@ import type {
   EtfProviderMap,
   EtfQuoteResponse,
   EtfListSource,
+  SectorListInput,
+  SectorListItem,
+  SectorListResponse,
+  SectorProviderApi,
+  SectorSnapshotItem,
   StockDataLogContext
 } from "./types.js";
 
@@ -386,4 +398,139 @@ export async function runEtfList(
 
 export function buildKlineCloses(points: EtfKlinePoint[]): number[] {
   return points.map((item) => item.close);
+}
+
+function compareNullableNumber(left: number | null, right: number | null, direction: SortDirection): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  const delta = left - right;
+  return direction === "asc" ? delta : -delta;
+}
+
+function sortSectorItems(items: SectorListItem[], sortBy: NonNullable<SectorListInput["sortBy"]>): SectorListItem[] {
+  const direction: SortDirection = sortBy === "losers" ? "asc" : "desc";
+
+  return [...items].sort((left, right) => {
+    if (sortBy === "hot") {
+      const hotDelta = compareNullableNumber(left.hotScore, right.hotScore, "desc");
+      if (hotDelta !== 0) {
+        return hotDelta;
+      }
+      const fallback = compareNullableNumber(left.changePercent, right.changePercent, "desc");
+      if (fallback !== 0) {
+        return fallback;
+      }
+      return left.sectorName.localeCompare(right.sectorName, "zh-CN");
+    }
+
+    const delta = compareNullableNumber(left.changePercent, right.changePercent, direction);
+    if (delta !== 0) {
+      return delta;
+    }
+
+    return left.sectorName.localeCompare(right.sectorName, "zh-CN");
+  });
+}
+
+export type SectorListDependencies = {
+  provider?: SectorProviderApi;
+  newsFetcher?: (timeoutMs: number) => Promise<string[]>;
+};
+
+export async function runSectorList(
+  input: SectorListInput = {},
+  dependencies: SectorListDependencies = {},
+  now: () => Date = () => new Date(),
+  context?: StockDataLogContext
+): Promise<SectorListResponse> {
+  const normalized = normalizeSectorListInput(input);
+  const provider = dependencies.provider ?? createAkshareProvider();
+  const newsFetcher = dependencies.newsFetcher ?? fetchFinanceNewsTitles;
+
+  logStockDataEvent("sector_list.start", {
+    requestId: context?.requestId,
+    input: {
+      page: normalized.page,
+      pageSize: normalized.pageSize,
+      sortBy: normalized.sortBy,
+      timeoutMs: normalized.timeoutMs
+    }
+  });
+
+  const baseItems = await provider.listIndustrySummary(normalized, context);
+  if (!baseItems.length) {
+    throw new Error("sector list is empty");
+  }
+
+  const marketScores = calculateMarketScores(baseItems);
+  let newsScores = new Array(baseItems.length).fill(0);
+  let newsScoreDegraded = false;
+
+  try {
+    const newsTitles = await newsFetcher(normalized.timeoutMs);
+    if (newsTitles.length > 0) {
+      newsScores = calculateNewsScores(baseItems, newsTitles);
+    } else {
+      newsScoreDegraded = true;
+    }
+  } catch (error) {
+    newsScoreDegraded = true;
+    logStockDataEvent("sector_list.news_error", {
+      requestId: context?.requestId,
+      error: error instanceof Error ? error.message : String(error)
+    }, "notice");
+  }
+
+  const computed: SectorListItem[] = baseItems.map((item: SectorSnapshotItem, index) => {
+    const marketScore = marketScores[index] ?? 0;
+    const newsScore = newsScores[index] ?? 0;
+    const hotScore = Number((0.7 * marketScore + 0.3 * newsScore).toFixed(6));
+    return {
+      ...item,
+      marketScore,
+      newsScore,
+      hotScore
+    };
+  });
+
+  const sorted = sortSectorItems(computed, normalized.sortBy);
+  const total = sorted.length;
+  const start = (normalized.page - 1) * normalized.pageSize;
+  const end = start + normalized.pageSize;
+  const pageData = sorted.slice(start, end);
+  const hasMore = end < total;
+
+  const response: SectorListResponse = {
+    source: "akshare_ths",
+    generatedAt: buildGeneratedAt(now),
+    sortBy: normalized.sortBy,
+    page: normalized.page,
+    pageSize: normalized.pageSize,
+    limit: normalized.limit,
+    total,
+    count: pageData.length,
+    hasMore,
+    newsScoreDegraded,
+    data: pageData
+  };
+
+  logStockDataEvent("sector_list.success", {
+    requestId: context?.requestId,
+    sortBy: response.sortBy,
+    page: response.page,
+    pageSize: response.pageSize,
+    total: response.total,
+    count: response.count,
+    hasMore: response.hasMore,
+    newsScoreDegraded: response.newsScoreDegraded
+  });
+
+  return response;
 }

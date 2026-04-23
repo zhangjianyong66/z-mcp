@@ -1,5 +1,6 @@
 export type EtfProvider = "eastmoney" | "xueqiu";
 export type EtfListSource = "auto" | "eastmoney" | "sse";
+export type SectorListSource = "akshare_ths";
 
 export type EtfInput = {
   symbol: string;
@@ -12,6 +13,7 @@ export type EtfKlineInput = EtfInput & {
 };
 
 export type EtfListSortBy = "gainers" | "losers" | "volume" | "amount" | "turnoverRate";
+export type SectorListSortBy = "gainers" | "losers" | "hot";
 
 export type EtfListInput = {
   limit?: number;
@@ -21,6 +23,14 @@ export type EtfListInput = {
   fetchAll?: boolean;
   timeout?: number;
   source?: EtfListSource;
+};
+
+export type SectorListInput = {
+  limit?: number;
+  page?: number;
+  pageSize?: number;
+  sortBy?: SectorListSortBy;
+  timeout?: number;
 };
 
 export type NormalizedEtfInput = {
@@ -41,6 +51,14 @@ export type NormalizedEtfListInput = {
   sortBy: EtfListSortBy;
   fetchAll: boolean;
   source: EtfListSource;
+  timeoutMs: number;
+};
+
+export type NormalizedSectorListInput = {
+  page: number;
+  limit: number;
+  pageSize: number;
+  sortBy: SectorListSortBy;
   timeoutMs: number;
 };
 
@@ -181,4 +199,39 @@ export type EtfProviderMap = Record<EtfProvider, EtfProviderApi>;
 export type EtfListPage = {
   total: number | null;
   items: EtfListItem[];
+};
+
+export type SectorListItem = {
+  sectorName: string;
+  changePercent: number | null;
+  upCount: number | null;
+  downCount: number | null;
+  amount: number | null;
+  netInflow: number | null;
+  leaderStock: string | null;
+  leaderLatestPrice: number | null;
+  leaderChangePercent: number | null;
+  marketScore: number;
+  newsScore: number;
+  hotScore: number;
+};
+
+export type SectorListResponse = {
+  source: SectorListSource;
+  generatedAt: string;
+  sortBy: SectorListSortBy;
+  page: number;
+  pageSize: number;
+  limit: number;
+  total: number;
+  count: number;
+  hasMore: boolean;
+  newsScoreDegraded: boolean;
+  data: SectorListItem[];
+};
+
+export type SectorSnapshotItem = Omit<SectorListItem, "marketScore" | "newsScore" | "hotScore">;
+
+export type SectorProviderApi = {
+  listIndustrySummary(input: NormalizedSectorListInput, context?: StockDataLogContext): Promise<SectorSnapshotItem[]>;
 };

@@ -3,9 +3,11 @@ import type {
   EtfKlineInput,
   EtfListInput,
   EtfProvider,
+  SectorListInput,
   NormalizedEtfInput,
   NormalizedEtfKlineInput,
   NormalizedEtfListInput,
+  NormalizedSectorListInput,
   NormalizedSymbol
 } from "./types.js";
 import {
@@ -82,5 +84,16 @@ export function normalizeEtfListInput(input: EtfListInput = {}): NormalizedEtfLi
     fetchAll: input.fetchAll ?? false,
     source: input.source ?? "auto",
     timeoutMs: normalizeTimeoutSeconds(input.timeout) * 1000
+  };
+}
+
+export function normalizeSectorListInput(input: SectorListInput = {}): NormalizedSectorListInput {
+  const pageSize = input.pageSize ?? input.limit ?? DEFAULT_LIST_LIMIT;
+  return {
+    page: clamp(input.page ?? 1, 1, Number.MAX_SAFE_INTEGER),
+    limit: clamp(pageSize, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
+    pageSize: clamp(pageSize, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
+    sortBy: input.sortBy ?? "hot",
+    timeoutMs: normalizeTimeoutSeconds(input.timeout ?? 20) * 1000
   };
 }

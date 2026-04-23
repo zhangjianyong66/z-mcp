@@ -7,7 +7,8 @@ import {
   runEtfAnalyze,
   runEtfKline,
   runEtfList,
-  runEtfQuote
+  runEtfQuote,
+  runSectorList
 } from "./stock-data.js";
 import {
   configureStockDataLogging,
@@ -91,6 +92,7 @@ configureStockDataLogging(server);
 const providerSchema = z.enum(["eastmoney", "xueqiu"]);
 const listSourceSchema = z.enum(["auto", "eastmoney", "sse"]);
 const etfListSortSchema = z.enum(["gainers", "losers", "volume", "amount", "turnoverRate"]);
+const sectorListSortSchema = z.enum(["gainers", "losers", "hot"]);
 
 server.tool(
   "etf_quote",
@@ -194,6 +196,38 @@ server.tool(
         { limit, page, pageSize, sortBy, fetchAll, source, timeout },
         (requestId) =>
           runEtfList({ limit, page, pageSize, sortBy, fetchAll, source, timeout }, undefined, undefined, { requestId })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "sector_list",
+  "获取同花顺行业板块汇总行情，支持涨幅榜、跌幅榜和热门榜排序。",
+  {
+    limit: z.number().int().min(1).max(100).optional().describe("Legacy alias for pageSize. Defaults to 20."),
+    page: z.number().int().min(1).optional().describe("Optional page number. Defaults to 1."),
+    pageSize: z.number().int().min(1).max(100).optional().describe("Optional page size. Defaults to 20."),
+    sortBy: sectorListSortSchema.optional().describe("Optional sort mode. Defaults to hot."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 20.")
+  },
+  async ({ limit, page, pageSize, sortBy, timeout }) => {
+    try {
+      const result = await runTool(
+        "sector_list",
+        { limit, page, pageSize, sortBy, timeout },
+        (requestId) =>
+          runSectorList({ limit, page, pageSize, sortBy, timeout }, undefined, undefined, { requestId })
       );
       return {
         content: [
