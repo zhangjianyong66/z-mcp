@@ -72,3 +72,31 @@ test("resolveServerTarget defaults to sibling package paths", () => {
   assert.match(target.cwd, /image-mcp$/);
   assert.deepEqual(target.args, ["--import", "tsx", "src/index.ts"]);
 });
+
+test("resolveServerTarget supports huawei-phone-push preset", () => {
+  const target = resolveServerTarget({ serverName: "huawei-phone-push" });
+  assert.match(target.cwd, /huawei-phone-push-mcp$/);
+});
+
+test("resolveServerTarget passes through required env for huawei-phone-push", () => {
+  const previousAuth = process.env.HUAWEI_PUSH_AUTH_CODE;
+  const previousPush = process.env.HUAWEI_PUSH_URL;
+  process.env.HUAWEI_PUSH_AUTH_CODE = "secret-auth";
+  process.env.HUAWEI_PUSH_URL = "https://example.com/push";
+  try {
+    const target = resolveServerTarget({ serverName: "huawei-phone-push" });
+    assert.equal(target.env?.HUAWEI_PUSH_AUTH_CODE, "secret-auth");
+    assert.equal(target.env?.HUAWEI_PUSH_URL, "https://example.com/push");
+  } finally {
+    if (previousAuth === undefined) {
+      delete process.env.HUAWEI_PUSH_AUTH_CODE;
+    } else {
+      process.env.HUAWEI_PUSH_AUTH_CODE = previousAuth;
+    }
+    if (previousPush === undefined) {
+      delete process.env.HUAWEI_PUSH_URL;
+    } else {
+      process.env.HUAWEI_PUSH_URL = previousPush;
+    }
+  }
+});

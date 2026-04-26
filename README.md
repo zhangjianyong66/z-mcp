@@ -16,6 +16,9 @@
   - ETF 数据能力
   - 当前提供 ETF 最新行情、历史 K 线、技术分析和 ETF 列表工具
   - provider 包括 `eastmoney` 与 `xueqiu`，其中 `etf_list` 默认解析东财 `fund_etf` 网格页数据，并支持 `eastmoney` / `sse` 自动回退，返回中会带 `sourceUrl` 和 `sourceQuery`
+- `huawei-phone-push-mcp`
+  - 华为手机结果推送能力
+  - 提供任务结果推送与本地推送记录查询工具
 - `mcp-cli`
   - MCP 协议调试与冒烟测试工具
   - 方便列出 tools、调用 tool、查看 server capabilities
@@ -39,6 +42,7 @@ z-mcp/
 ├── image-mcp/
 ├── search-mcp/
 ├── stock-data-mcp/
+├── huawei-phone-push-mcp/
 ├── mcp-cli/
 ├── playwright-tools/
 ├── feishu-mcp/
@@ -84,6 +88,18 @@ z-mcp/
 - 支持通过 `etf_list` 获取 ETF 列表
 
 模块说明见 [stock-data-mcp/README.md](./stock-data-mcp/README.md)。
+
+### huawei-phone-push-mcp
+
+路径：`huawei-phone-push-mcp/`
+
+功能：
+
+- 支持通过 `push_to_huawei_phone` 推送任务执行结果
+- 支持通过 `get_push_history` 查询本地推送记录
+- 支持通过环境变量配置推送 URL、鉴权码和记录策略
+
+模块说明见 [huawei-phone-push-mcp/README.md](./huawei-phone-push-mcp/README.md)。
 
 ### playwright-tools
 

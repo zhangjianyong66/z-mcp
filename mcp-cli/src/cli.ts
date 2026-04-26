@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
 
-export type ServerPresetName = "image" | "search" | "stock-data";
+export type ServerPresetName = "image" | "search" | "stock-data" | "huawei-phone-push";
 export type RunMode = "dev" | "dist";
 export type CommandName = "inspect" | "list-tools" | "call-tool";
 
@@ -28,10 +28,21 @@ export type CliOptions =
       input: Record<string, unknown>;
     };
 
-const SERVER_PRESETS: Record<ServerPresetName, { dir: string }> = {
+type ServerPreset = {
+  dir: string;
+  devArgs?: string[];
+  distArgs?: string[];
+  envPassthrough?: string[];
+};
+
+const SERVER_PRESETS: Record<ServerPresetName, ServerPreset> = {
   image: { dir: "image-mcp" },
   search: { dir: "search-mcp" },
-  "stock-data": { dir: "stock-data-mcp" }
+  "stock-data": { dir: "stock-data-mcp" },
+  "huawei-phone-push": {
+    dir: "huawei-phone-push-mcp",
+    envPassthrough: ["HUAWEI_PUSH_AUTH_CODE", "HUAWEI_PUSH_URL"]
+  }
 };
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,7 +63,7 @@ function toUsage(): string {
     "  mcp-cli call-tool <server> <tool> --input '{\"key\":\"value\"}' [--mode dev|dist]",
     "",
     "Servers:",
-    "  image | search | stock-data",
+    "  image | search | stock-data | huawei-phone-push",
     "",
     "Options:",
     "  --mode dev|dist   Select how to launch the server. Default: dev",
@@ -109,13 +120,29 @@ export function resolveServerTarget(input: {
   const command = input.commandOverride ?? "node";
   const args =
     input.argsOverride ??
-    (mode === "dev" ? ["--import", "tsx", "src/index.ts"] : ["dist/index.js"]);
+    (mode === "dev"
+      ? (preset?.devArgs ?? ["--import", "tsx", "src/index.ts"])
+      : (preset?.distArgs ?? ["dist/index.js"]));
+
+  let env: Record<string, string> | undefined;
+  if (preset?.envPassthrough && preset.envPassthrough.length > 0) {
+    const injected = Object.fromEntries(
+      preset.envPassthrough
+        .map((name) => [name, process.env[name]])
+        .filter(([, value]) => typeof value === "string" && value.length > 0)
+        .map(([name, value]) => [name, value as string])
+    );
+    if (Object.keys(injected).length > 0) {
+      env = injected;
+    }
+  }
 
   return {
     name: presetName,
     command,
     args,
-    cwd: targetDir
+    cwd: targetDir,
+    ...(env ? { env } : {})
   };
 }
 
