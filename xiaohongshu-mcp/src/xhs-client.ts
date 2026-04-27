@@ -40,6 +40,9 @@ const QR_OUTPUT_PATH = `${QR_OUTPUT_DIR}/xhs-login-qrcode.png`;
 const LOGIN_PENDING_TIMEOUT_MS = 4 * 60 * 1000;
 const LOGIN_SUCCESS_KEEPALIVE_MS = 60 * 60 * 1000;
 const LOGIN_POLL_INTERVAL_MS = 1000;
+const QRCODE_REFRESH_WAIT_MS = 8000;
+const QRCODE_REFRESH_MAX_ATTEMPTS = 2;
+const QRCODE_REFRESH_POLL_INTERVAL_MS = 300;
 
 type LoginSessionStatus = "pending" | "success";
 
@@ -57,6 +60,14 @@ type LoginStateProbe = {
   hasLoginQr: boolean;
   hasUserMarker: boolean;
   cookieText: string;
+  hasLoginPanel: boolean;
+  hasExpiredHint: boolean;
+};
+
+type QrcodeProbe = {
+  src: string | null;
+  hasLoginQr: boolean;
+  hasExpiredHint: boolean;
 };
 
 export class XhsClient {
@@ -70,19 +81,19 @@ export class XhsClient {
   }
 
   public async checkLoginStatus(): Promise<{ is_logged_in: boolean; username?: string }> {
-    const activeLoginSession = await this.getActiveLoginSession();
-    if (activeLoginSession) {
-      if (activeLoginSession.status === "success") {
-        const username = await this.readUsername();
-        if (username) {
-          return { is_logged_in: true, username };
-        }
-        return { is_logged_in: true };
-      }
-      return { is_logged_in: false };
-    }
-
     return this.withRuntime(async () => {
+      const activeLoginSession = await this.getActiveLoginSession();
+      if (activeLoginSession) {
+        if (activeLoginSession.status === "success") {
+          const username = await this.readUsername();
+          if (username) {
+            return { is_logged_in: true, username };
+          }
+          return { is_logged_in: true };
+        }
+        return { is_logged_in: false };
+      }
+
       await this.openExplore();
       const loggedIn = await this.isLoggedIn();
       if (!loggedIn) {
@@ -113,44 +124,37 @@ export class XhsClient {
       reused: boolean;
     };
   }> {
-    const existing = await this.getActiveLoginSession();
-    if (existing) {
-      if (existing.status === "success") {
-        return { is_logged_in: true };
-      }
-      await this.ensureQrcodeFileReadyOrRewrite(existing);
-      const qrImage = await this.buildQrcodeInfo();
-      return {
-        is_logged_in: false,
-        qr_local_path: QR_OUTPUT_PATH,
-        qr_image: qrImage,
-        login_session: {
-          status: existing.status,
-          expires_at: new Date(existing.expiresAt).toISOString(),
-          reused: true
-        }
-      };
-    }
-
     return this.withRuntime(async () => {
+      const existing = await this.getActiveLoginSession();
+      if (existing) {
+        if (existing.status === "success") {
+          return { is_logged_in: true };
+        }
+
+        await this.openExplore();
+        const src = await this.resolveQrcodeSrc();
+        existing.qrCodeSrc = src;
+        await this.persistQrcode(src);
+        await this.ensureQrcodeFileReady();
+        const qrImage = await this.buildQrcodeInfo();
+        return {
+          is_logged_in: false,
+          qr_local_path: QR_OUTPUT_PATH,
+          qr_image: qrImage,
+          login_session: {
+            status: existing.status,
+            expires_at: new Date(existing.expiresAt).toISOString(),
+            reused: true
+          }
+        };
+      }
+
       await this.openExplore();
       if (await this.isLoggedIn()) {
         return { is_logged_in: true };
       }
 
-      const src = await this.driver.waitFor<string | null>(
-        `
-          const img = document.querySelector('.login-container .qrcode-img, .login-mask .qrcode-img');
-          return img?.getAttribute('src') ?? null;
-        `,
-        (value) => typeof value === "string" && value.length > 0,
-        this.config.navTimeoutMs
-      );
-
-      if (!src) {
-        throw new AppError("internal_error", "failed to read qrcode src");
-      }
-
+      const src = await this.resolveQrcodeSrc();
       await this.persistQrcode(src);
       await this.ensureQrcodeFileReady();
       const qrImage = await this.buildQrcodeInfo();
@@ -292,16 +296,23 @@ export class XhsClient {
 
   private async isLoggedIn(): Promise<boolean> {
     const state = await this.detectLoginState();
-    return state === "logged_in" || state === "unknown";
+    return state === "logged_in";
   }
 
   private async detectLoginState(): Promise<LoginState> {
     const probe = await this.driver.evaluate<LoginStateProbe>(`
       const cookieText = document.cookie || '';
       const hasLoginQr = Boolean(document.querySelector('.login-container .qrcode-img, .login-mask .qrcode-img'));
-      const hasUserMarker = Boolean(document.querySelector('.main-container .user .link-wrapper .channel, a[href*="/user/profile/"], .reds-avatar'));
-      return { hasLoginQr, hasUserMarker, cookieText };
+      const hasLoginPanel = Boolean(document.querySelector('.login-container, .login-mask'));
+      const bodyText = (document.body?.innerText || '').toLowerCase();
+      const hasExpiredHint = /二维码已过期|二维码过期|点击刷新|qrcode expired|qr code expired/.test(bodyText);
+      const hasUserMarker = Boolean(document.querySelector('.main-container .user .link-wrapper .channel'));
+      return { hasLoginQr, hasUserMarker, cookieText, hasLoginPanel, hasExpiredHint };
     `);
+
+    if (probe.hasLoginQr || probe.hasLoginPanel || probe.hasExpiredHint) {
+      return "logged_out";
+    }
 
     if (probe.hasUserMarker) {
       return "logged_in";
@@ -329,7 +340,7 @@ export class XhsClient {
   }
 
   private getAuthCookieNames(): Set<string> {
-    return new Set(["web_session", "websectiga", "web_session_sid", "a1", "gid"]);
+    return new Set(["web_session", "web_session_sid"]);
   }
 
   private async detectRisk(): Promise<void> {
@@ -357,6 +368,14 @@ export class XhsClient {
       if (loggedIn) {
         await this.markLoginSessionSuccess(session);
       } else if (Date.now() >= session.expiresAt) {
+        await this.closeLoginSession(session);
+        return undefined;
+      }
+    }
+
+    if (session.status === "success") {
+      const loggedIn = await this.isLoggedIn();
+      if (!loggedIn) {
         await this.closeLoginSession(session);
         return undefined;
       }
@@ -435,23 +454,95 @@ export class XhsClient {
     this.loginSession = null;
   }
 
-  private async ensureQrcodeFileReadyOrRewrite(session: LoginSession): Promise<void> {
-    try {
-      await this.ensureQrcodeFileReady();
-      return;
-    } catch {
-      const src = await this.driver.evaluate<string | null>(`
-        const img = document.querySelector('.login-container .qrcode-img, .login-mask .qrcode-img');
-        return img?.getAttribute('src') ?? null;
-      `);
-      const usableSrc = src ?? session.qrCodeSrc;
-      if (!usableSrc) {
-        throw new AppError("internal_error", "failed to refresh qrcode from active login session");
-      }
-      session.qrCodeSrc = usableSrc;
-      await this.persistQrcode(usableSrc);
-      await this.ensureQrcodeFileReady();
+  private async resolveQrcodeSrc(): Promise<string> {
+    const initialProbe = await this.readQrcodeProbe();
+    if (initialProbe.src && !initialProbe.hasExpiredHint) {
+      return initialProbe.src;
     }
+
+    for (let attempt = 1; attempt <= QRCODE_REFRESH_MAX_ATTEMPTS; attempt += 1) {
+      const shouldRefresh = initialProbe.hasExpiredHint || initialProbe.hasLoginQr || attempt > 1;
+      if (shouldRefresh) {
+        const clicked = await this.tryClickQrcodeRefresh();
+        if (!clicked) {
+          await this.openExplore();
+        }
+      }
+
+      try {
+        const src = await this.waitForUsableQrcode(QRCODE_REFRESH_WAIT_MS);
+        return src;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/timeout/i.test(message) || attempt >= QRCODE_REFRESH_MAX_ATTEMPTS) {
+          throw error;
+        }
+        await this.openExplore();
+      }
+    }
+
+    throw new AppError("timeout", "qrcode refresh timed out");
+  }
+
+  private async readQrcodeProbe(): Promise<QrcodeProbe> {
+    return this.driver.evaluate<QrcodeProbe>(`
+      const img = document.querySelector('.login-container .qrcode-img, .login-mask .qrcode-img');
+      const src = img?.getAttribute('src') ?? null;
+      const bodyText = (document.body?.innerText || '').toLowerCase();
+      const hasExpiredHint = /二维码已过期|二维码过期|点击刷新|qrcode expired|qr code expired/.test(bodyText);
+      const hasLoginQr = Boolean(img);
+      return { src, hasLoginQr, hasExpiredHint };
+    `);
+  }
+
+  private async tryClickQrcodeRefresh(): Promise<boolean> {
+    return this.driver.evaluate<boolean>(`
+      const exactKeywords = ['点击刷新', '刷新二维码', '刷新'];
+      const isVisible = (el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const candidates = Array.from(document.querySelectorAll('button, a, [role="button"], span, div'))
+        .map((el) => ({ el, text: (el.textContent || '').trim() }))
+        .filter((item) => item.text.length > 0 && isVisible(item.el));
+      const exact = candidates.find((item) => exactKeywords.includes(item.text));
+      const fuzzy = candidates.find((item) => exactKeywords.some((keyword) => item.text.includes(keyword)) && item.text.length <= 12);
+      const target = (exact?.el ?? fuzzy?.el) || null;
+      if (!target) {
+        return false;
+      }
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      return true;
+    `);
+  }
+
+  private async waitForUsableQrcode(timeoutMs: number): Promise<string> {
+    const probe = await this.driver.waitFor<QrcodeProbe>(
+      `
+        const img = document.querySelector('.login-container .qrcode-img, .login-mask .qrcode-img');
+        const src = img?.getAttribute('src') ?? null;
+        const bodyText = (document.body?.innerText || '').toLowerCase();
+        const hasExpiredHint = /二维码已过期|二维码过期|点击刷新|qrcode expired|qr code expired/.test(bodyText);
+        const hasLoginQr = Boolean(img);
+        return { src, hasLoginQr, hasExpiredHint };
+      `,
+      (value) => {
+        if (typeof value.src !== "string" || value.src.length === 0) {
+          return false;
+        }
+        if (value.hasExpiredHint) {
+          return false;
+        }
+        return true;
+      },
+      timeoutMs,
+      QRCODE_REFRESH_POLL_INTERVAL_MS
+    );
+
+    if (!probe.src) {
+      throw new AppError("internal_error", "failed to read qrcode src");
+    }
+    return probe.src;
   }
 
   private async readUsername(): Promise<string | undefined> {

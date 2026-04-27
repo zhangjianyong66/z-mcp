@@ -28,6 +28,9 @@
 - `feishu-mcp`
   - 飞书群聊管理能力
   - 提供建群、改名、解散、成员管理、群查询与成员查询工具
+- `todo-mcp`
+  - 待办任务管理能力
+  - 提供创建、更新、完成、软删除、单条查询与列表筛选工具
 - `xiaohongshu-mcp`
   - 小红书 MCP 服务
   - 作为 Git 子模块接入，路径为 `xiaohongshu-mcp/`
@@ -46,6 +49,7 @@ z-mcp/
 ├── mcp-cli/
 ├── playwright-tools/
 ├── feishu-mcp/
+├── todo-mcp/
 └── xiaohongshu-mcp/
 ```
 
@@ -125,6 +129,18 @@ z-mcp/
 - 支持通过 `list_chats`、`get_chat`、`list_chat_members` 查询群与成员
 
 模块说明见 [feishu-mcp/README.md](./feishu-mcp/README.md)。
+
+### todo-mcp
+
+路径：`todo-mcp/`
+
+功能：
+
+- 支持通过 `create_todo` 创建待办任务
+- 支持通过 `update_todo`、`complete_todo`、`delete_todo` 管理任务
+- 支持通过 `get_todo`、`list_todos` 查询任务（含筛选/排序/分页）
+
+模块说明见 [todo-mcp/README.md](./todo-mcp/README.md)。
 
 ### xiaohongshu-mcp
 
