@@ -80,7 +80,7 @@ server.tool(
   "create_plan",
   "创建执行计划。",
   {
-    title: z.string().min(1).describe("计划标题"),
+    title: z.string().trim().min(1).describe("计划标题"),
     description: z.string().optional().describe("计划描述")
   },
   async ({ title, description }) => {
@@ -98,7 +98,7 @@ server.tool(
   "更新执行计划。",
   {
     plan_id: z.string().min(1).describe("计划 ID"),
-    title: z.string().optional().describe("计划标题"),
+    title: z.string().trim().min(1).optional().describe("计划标题"),
     description: z.string().optional().describe("计划描述，传空字符串可清空"),
     status: z.enum(["active", "archived"]).optional().describe("计划状态")
   },
@@ -186,7 +186,7 @@ server.tool(
   "创建主任务。",
   {
     plan_id: z.string().min(1).describe("计划 ID"),
-    title: z.string().min(1).describe("任务标题"),
+    title: z.string().trim().min(1).describe("任务标题"),
     note: z.string().optional().describe("任务备注"),
     priority: z.number().int().min(1).optional().describe("优先级数字，越小越高，默认 5"),
     due_date: z.string().optional().describe("截止时间，ISO 8601")
@@ -206,7 +206,7 @@ server.tool(
   "更新主任务。",
   {
     task_id: z.string().min(1).describe("任务 ID"),
-    title: z.string().optional().describe("任务标题"),
+    title: z.string().trim().min(1).optional().describe("任务标题"),
     note: z.string().optional().describe("任务备注，传空字符串可清空"),
     priority: z.number().int().min(1).optional().describe("优先级数字，越小越高"),
     due_date: z.string().optional().describe("截止时间，传空字符串可清空")
@@ -313,7 +313,7 @@ server.tool(
   "创建子任务。",
   {
     task_id: z.string().min(1).describe("父任务 ID"),
-    title: z.string().min(1).describe("子任务标题"),
+    title: z.string().trim().min(1).describe("子任务标题"),
     note: z.string().optional().describe("子任务备注"),
     priority: z.number().int().min(1).optional().describe("优先级数字，越小越高，默认 5"),
     due_date: z.string().optional().describe("截止时间，ISO 8601")
@@ -333,7 +333,7 @@ server.tool(
   "更新子任务。",
   {
     subtask_id: z.string().min(1).describe("子任务 ID"),
-    title: z.string().optional().describe("子任务标题"),
+    title: z.string().trim().min(1).optional().describe("子任务标题"),
     note: z.string().optional().describe("子任务备注，传空字符串可清空"),
     priority: z.number().int().min(1).optional().describe("优先级数字，越小越高"),
     due_date: z.string().optional().describe("截止时间，传空字符串可清空")
