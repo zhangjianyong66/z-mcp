@@ -331,7 +331,7 @@ async function planListPage(allPlans: PlanWithProgress[]): Promise<string | null
       process.stdin.off("keypress", onKeypress);
       setRawMode(false);
     };
-    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 });
+    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 } as any);
     setRawMode(true);
     setActiveCleanup(cleanup);
     process.stdin.on("keypress", onKeypress);
@@ -392,7 +392,7 @@ async function planDetailPage(planId: string) {
       process.stdin.off("keypress", onKeypress);
       setRawMode(false);
     };
-    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 });
+    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 } as any);
     setRawMode(true);
     setActiveCleanup(cleanup);
     process.stdin.on("keypress", onKeypress);
@@ -436,7 +436,7 @@ async function statsPage() {
       process.stdin.off("keypress", onKeypress);
       setRawMode(false);
     };
-    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 });
+    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 } as any);
     setRawMode(true);
     setActiveCleanup(cleanup);
     process.stdin.on("keypress", onKeypress);
@@ -461,7 +461,7 @@ async function showMessagePage(message: string) {
       }
     };
 
-    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 });
+    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 } as any);
     setRawMode(true);
     setActiveCleanup(cleanup);
     process.stdin.on("keypress", onKeypress);
@@ -524,7 +524,7 @@ async function mainMenu(): Promise<string> {
       }
     };
 
-    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 });
+    readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 50 } as any);
     setRawMode(true);
     setActiveCleanup(cleanup);
     process.stdin.on("keypress", onKeypress);
