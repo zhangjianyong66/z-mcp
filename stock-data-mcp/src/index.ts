@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   runEtfAnalyze,
   runEtfKline,
-  runEtfList,
   runEtfQuote,
   runSectorList
 } from "./stock-data.js";
@@ -14,6 +13,7 @@ import {
   configureStockDataLogging,
   logStockDataEvent
 } from "./logging.js";
+import { warmXueqiuCookie } from "./providers/xueqiu.js";
 
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
   const message = error instanceof Error ? error.message : String(error);
@@ -89,9 +89,7 @@ const server = new McpServer({
 
 configureStockDataLogging(server);
 
-const providerSchema = z.enum(["eastmoney", "xueqiu"]);
-const listSourceSchema = z.enum(["auto", "eastmoney", "sse"]);
-const etfListSortSchema = z.enum(["gainers", "losers", "volume", "amount", "turnoverRate"]);
+const providerSchema = z.enum(["xueqiu"]);
 const sectorListSortSchema = z.enum(["gainers", "losers", "hot"]);
 
 server.tool(
@@ -99,7 +97,7 @@ server.tool(
   "获取最新 ETF 行情。支持 159930、510300、SZ159930、SH510300 等代码格式。",
   {
     symbol: z.string().min(1).describe("ETF symbol such as 159930 or SZ159930."),
-    source: providerSchema.optional().describe("Optional provider. Defaults to eastmoney."),
+    source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
     timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 15.")
   },
   async ({ symbol, source, timeout }) => {
@@ -126,7 +124,7 @@ server.tool(
   "获取 ETF 历史日 K 线数据。",
   {
     symbol: z.string().min(1).describe("ETF symbol such as 159930 or SH510300."),
-    source: providerSchema.optional().describe("Optional provider. Defaults to eastmoney."),
+    source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
     days: z.number().int().min(5).max(180).optional().describe("Optional day count. Defaults to 30."),
     timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 15.")
   },
@@ -178,40 +176,6 @@ server.tool(
 );
 
 server.tool(
-  "etf_list",
-  "解析东方财富基金 ETF 列表页面获取 ETF 列表，支持可选排序、分页、全量拉取，并在东方财富异常时自动回退到上海证券交易所。",
-  {
-    limit: z.number().int().min(1).max(100).optional().describe("Legacy alias for pageSize. Defaults to 20."),
-    page: z.number().int().min(1).optional().describe("Optional page number. Defaults to 1."),
-    pageSize: z.number().int().min(1).max(100).optional().describe("Optional page size. Defaults to 20."),
-    sortBy: etfListSortSchema.optional().describe("Optional sort mode. Defaults to gainers."),
-    fetchAll: z.boolean().optional().describe("If true, fetch every page before returning."),
-    source: listSourceSchema.optional().describe("Optional data source. Defaults to auto."),
-    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 15.")
-  },
-  async ({ limit, page, pageSize, sortBy, fetchAll, source, timeout }) => {
-    try {
-      const result = await runTool(
-        "etf_list",
-        { limit, page, pageSize, sortBy, fetchAll, source, timeout },
-        (requestId) =>
-          runEtfList({ limit, page, pageSize, sortBy, fetchAll, source, timeout }, undefined, undefined, { requestId })
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
-      };
-    } catch (error) {
-      return toToolError(error);
-    }
-  }
-);
-
-server.tool(
   "sector_list",
   "获取同花顺行业板块汇总行情，支持涨幅榜、跌幅榜和热门榜排序。",
   {
@@ -244,6 +208,7 @@ server.tool(
 );
 
 async function main(): Promise<void> {
+  await warmXueqiuCookie();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

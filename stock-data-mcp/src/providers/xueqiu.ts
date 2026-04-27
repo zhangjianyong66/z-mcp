@@ -120,6 +120,15 @@ export async function resolveXueqiuCookie(): Promise<string> {
   return cookie;
 }
 
+export async function warmXueqiuCookie(): Promise<void> {
+  try {
+    await resolveXueqiuCookie();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[stock-data-mcp] xueqiu cookie warm failed: ${message}`);
+  }
+}
+
 async function createHeaders(): Promise<Record<string, string>> {
   const cfg = getXueqiuConfig();
   return {
@@ -168,11 +177,11 @@ export function parseXueqiuKlines(items: unknown[]): EtfKlinePoint[] {
     const row = item as Array<number | null>;
     return {
       date: new Date((row[0] ?? 0) as number).toISOString().slice(0, 10),
-      open: Number(row[1] ?? 0),
-      close: Number(row[2] ?? 0),
+      volume: typeof row[1] === "number" ? row[1] : null,
+      open: Number(row[2] ?? 0),
       high: Number(row[3] ?? 0),
       low: Number(row[4] ?? 0),
-      volume: typeof row[5] === "number" ? row[5] : null,
+      close: Number(row[5] ?? 0),
       changePercent: typeof row[7] === "number" ? row[7] : null
     };
   });

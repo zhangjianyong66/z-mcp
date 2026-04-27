@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   normalizeEtfInput,
   normalizeEtfKlineInput,
-  normalizeEtfListInput,
   normalizeSymbol
 } from "../src/symbol.js";
 
@@ -26,8 +25,8 @@ test("normalizeSymbol accepts prefixed Shanghai ETF code", () => {
 });
 
 test("normalizeEtfInput applies default provider and timeout", () => {
-  const input = normalizeEtfInput({ symbol: "510300" }, "eastmoney");
-  assert.equal(input.provider, "eastmoney");
+  const input = normalizeEtfInput({ symbol: "510300" }, "xueqiu");
+  assert.equal(input.provider, "xueqiu");
   assert.equal(input.timeoutMs, 15_000);
   assert.equal(input.normalizedSymbol.prefixed, "SH510300");
 });
@@ -36,31 +35,4 @@ test("normalizeEtfKlineInput clamps day range", () => {
   const input = normalizeEtfKlineInput({ symbol: "159930", days: 999 }, "xueqiu");
   assert.equal(input.days, 180);
   assert.equal(input.provider, "xueqiu");
-});
-
-test("normalizeEtfListInput applies defaults", () => {
-  assert.deepEqual(normalizeEtfListInput(), {
-    page: 1,
-    limit: 20,
-    pageSize: 20,
-    sortBy: "gainers",
-    fetchAll: false,
-    source: "auto",
-    timeoutMs: 15_000
-  });
-});
-
-test("normalizeEtfListInput treats limit as pageSize alias", () => {
-  assert.deepEqual(
-    normalizeEtfListInput({ limit: 9, sortBy: "amount", fetchAll: true, page: 2 }),
-    {
-      page: 2,
-      limit: 9,
-      pageSize: 9,
-      sortBy: "amount",
-      fetchAll: true,
-      source: "auto",
-      timeoutMs: 15_000
-    }
-  );
 });

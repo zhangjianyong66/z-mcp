@@ -61,6 +61,15 @@ export class TodoStore {
     }
   }
 
+  async close(): Promise<void> {
+    const db = await this.dbPromise;
+    try {
+      await db.close();
+    } catch (error) {
+      throw toIoError("close database", error);
+    }
+  }
+
   private async getDb(): Promise<Database> {
     return this.dbPromise;
   }

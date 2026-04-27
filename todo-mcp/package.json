@@ -9,7 +9,14 @@
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test tests/**/*.test.ts"
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "query": "tsx scripts/query-todos.ts",
+    "query:plans": "tsx scripts/query-todos.ts",
+    "query:tree": "tsx scripts/query-todos.ts --plan",
+    "query:todos": "tsx scripts/query-todos.ts --todos",
+    "query:stats": "tsx scripts/query-todos.ts --stats",
+    "query:help": "tsx scripts/query-todos.ts --help",
+    "query:cli": "tsx scripts/todo-cli.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

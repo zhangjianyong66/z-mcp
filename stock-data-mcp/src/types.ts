@@ -1,5 +1,4 @@
-export type EtfProvider = "eastmoney" | "xueqiu";
-export type EtfListSource = "auto" | "eastmoney" | "sse";
+export type EtfProvider = "xueqiu";
 export type SectorListSource = "akshare_ths";
 
 export type EtfInput = {
@@ -12,18 +11,7 @@ export type EtfKlineInput = EtfInput & {
   days?: number;
 };
 
-export type EtfListSortBy = "gainers" | "losers" | "volume" | "amount" | "turnoverRate";
 export type SectorListSortBy = "gainers" | "losers" | "hot";
-
-export type EtfListInput = {
-  limit?: number;
-  page?: number;
-  pageSize?: number;
-  sortBy?: EtfListSortBy;
-  fetchAll?: boolean;
-  timeout?: number;
-  source?: EtfListSource;
-};
 
 export type SectorListInput = {
   limit?: number;
@@ -42,16 +30,6 @@ export type NormalizedEtfInput = {
 
 export type NormalizedEtfKlineInput = NormalizedEtfInput & {
   days: number;
-};
-
-export type NormalizedEtfListInput = {
-  page: number;
-  limit: number;
-  pageSize: number;
-  sortBy: EtfListSortBy;
-  fetchAll: boolean;
-  source: EtfListSource;
-  timeoutMs: number;
 };
 
 export type NormalizedSectorListInput = {
@@ -134,72 +112,12 @@ export type EtfAnalyzeResponse = {
   recentKlines: EtfKlinePoint[];
 };
 
-export type EtfListItem = {
-  symbol: string;
-  name: string;
-  market: "SH" | "SZ";
-  normalizedSymbol: string;
-  secid: string;
-  fundAbbr?: string;
-  fundExpansionAbbr?: string;
-  companyName?: string;
-  companyCode?: string;
-  indexName?: string;
-  listingDate?: string;
-  category?: string;
-  scale?: number | null;
-  price: number | null;
-  changePercent: number | null;
-  changeAmount: number | null;
-  volume: number | null;
-  amount: number | null;
-  open: number | null;
-  high: number | null;
-  low: number | null;
-  prevClose: number | null;
-  amplitude: number | null;
-  turnoverRate: number | null;
-  volumeRatio: number | null;
-  peRatio: number | null;
-  pbRatio: number | null;
-  totalMarketValue: number | null;
-  circulationMarketValue: number | null;
-  change60d: number | null;
-  changeYtd: number | null;
-};
-
-export type EtfListResponse = {
-  source: EtfListSource;
-  sourceUrl: string;
-  sourceQuery: {
-    page: number;
-    pageSize: number;
-    sortBy: EtfListSortBy;
-  };
-  generatedAt: string;
-  sortBy: EtfListSortBy;
-  fetchAll: boolean;
-  page: number;
-  pageSize: number;
-  limit: number;
-  total: number;
-  count: number;
-  hasMore: boolean;
-  data: EtfListItem[];
-};
-
 export type EtfProviderApi = {
   quote(input: NormalizedEtfInput, context?: StockDataLogContext): Promise<EtfQuote>;
   kline(input: NormalizedEtfKlineInput, context?: StockDataLogContext): Promise<EtfKlinePoint[]>;
-  list?(input: NormalizedEtfListInput, context?: StockDataLogContext): Promise<EtfListPage>;
 };
 
 export type EtfProviderMap = Record<EtfProvider, EtfProviderApi>;
-
-export type EtfListPage = {
-  total: number | null;
-  items: EtfListItem[];
-};
 
 export type SectorListItem = {
   sectorName: string;
