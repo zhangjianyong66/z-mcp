@@ -271,7 +271,12 @@ async function planListPage(allPlans: PlanWithProgress[]): Promise<string | null
       printPlanList(allPlans, filter, selectedIndex, pageSize, currentPage);
     };
 
-    const onKeypress = (str: string, key: { name?: string; sequence?: string }) => {
+    const onKeypress = (str: string, key: { name?: string; sequence?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        runCleanup();
+        process.exit(0);
+      }
+
       if (key.name === "tab") {
         filter = filter === "todo" ? "done" : "todo";
         selectedIndex = 0;
@@ -356,7 +361,12 @@ async function planDetailPage(planId: string) {
       printPlanDetail(tree, filter, pageSize, currentPage);
     };
 
-    const onKeypress = (str: string, key: { name?: string }) => {
+    const onKeypress = (str: string, key: { name?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        runCleanup();
+        process.exit(0);
+      }
+
       if (key.name === "tab") {
         filter = filter === "todo" ? "done" : "todo";
         currentPage = 0;
@@ -424,7 +434,12 @@ async function statsPage() {
   }
 
   return new Promise<void>((resolve) => {
-    const onKeypress = (str: string, key: { name?: string }) => {
+    const onKeypress = (str: string, key: { name?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        runCleanup();
+        process.exit(0);
+      }
+
       if (str === "q" || key.name === "escape" || key.name === "return") {
         runCleanup();
         resolve();
@@ -453,7 +468,12 @@ async function showMessagePage(message: string) {
       setRawMode(false);
     };
 
-    const onKeypress = (str: string, key: { name?: string }) => {
+    const onKeypress = (str: string, key: { name?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        runCleanup();
+        process.exit(0);
+      }
+
       if (key.name === "return") {
         cleanup();
         runCleanup();
@@ -505,7 +525,12 @@ async function mainMenu(): Promise<string> {
       setRawMode(false);
     };
 
-    const onKeypress = (str: string, key: { name?: string }) => {
+    const onKeypress = (str: string, key: { name?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        runCleanup();
+        process.exit(0);
+      }
+
       if (key.name === "up") {
         selectedIndex = Math.max(0, selectedIndex - 1);
         render();
