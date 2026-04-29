@@ -306,7 +306,7 @@ export async function runCli(options: CliOptions): Promise<unknown> {
         const result = await client.callTool({
           name: options.toolName,
           arguments: options.input
-        });
+        }, undefined, { timeout: 10 * 60 * 1000 });
         return {
           server: options.server.name,
           tool: options.toolName,
