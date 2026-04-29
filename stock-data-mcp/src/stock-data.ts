@@ -8,12 +8,24 @@ import {
   fetchFinanceNewsTitles
 } from "./sector-hotness.js";
 import {
+  normalizeEtfBatchInput,
+  normalizeEtfBatchKlineInput,
   normalizeEtfInput,
   normalizeEtfKlineInput,
   normalizeSectorListInput
 } from "./symbol.js";
 import type {
   EtfAnalyzeResponse,
+  EtfBatchAnalyzeItem,
+  EtfBatchAnalyzeResponse,
+  EtfBatchErrorCode,
+  EtfBatchErrorItem,
+  EtfBatchInput,
+  EtfBatchKlineInput,
+  EtfBatchKlineItem,
+  EtfBatchKlineResponse,
+  EtfBatchQuoteItem,
+  EtfBatchQuoteResponse,
   EtfInput,
   EtfKlineInput,
   EtfKlinePoint,
@@ -57,6 +69,104 @@ function getTrend(current: number, ma5: number | null, ma10: number | null): str
 
 function buildGeneratedAt(now: () => Date): string {
   return now().toISOString();
+}
+
+const DEFAULT_BATCH_CONCURRENCY = 5;
+
+function isAbortLikeError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.name === "AbortError" || error.name === "TimeoutError";
+}
+
+function classifyBatchError(error: unknown): { code: EtfBatchErrorCode; retryable: boolean } {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (isAbortLikeError(error) || normalized.includes("timeout") || normalized.includes("aborted")) {
+    return { code: "timeout", retryable: true };
+  }
+
+  if (
+    normalized.includes("invalid") ||
+    normalized.includes("empty") ||
+    normalized.includes("parse") ||
+    normalized.includes("json") ||
+    normalized.includes("syntax")
+  ) {
+    return { code: "internal_error", retryable: false };
+  }
+
+  return { code: "upstream_error", retryable: true };
+}
+
+async function settleWithConcurrency<TInput, TOutput>(
+  items: TInput[],
+  concurrency: number,
+  task: (item: TInput, index: number) => Promise<TOutput>
+): Promise<Array<PromiseSettledResult<TOutput>>> {
+  const settled: Array<PromiseSettledResult<TOutput>> = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = nextIndex;
+        nextIndex += 1;
+
+        if (index >= items.length) {
+          return;
+        }
+
+        try {
+          const value = await task(items[index]!, index);
+          settled[index] = { status: "fulfilled", value };
+        } catch (reason) {
+          settled[index] = { status: "rejected", reason };
+        }
+      }
+    })
+  );
+
+  return settled;
+}
+
+function buildBatchErrorItem(symbol: string, provider: string, error: unknown): EtfBatchErrorItem {
+  const classification = classifyBatchError(error);
+  const message = error instanceof Error ? error.message : String(error);
+
+  return {
+    symbol,
+    error: `${provider} request failed: ${message}`,
+    code: classification.code,
+    retryable: classification.retryable
+  };
+}
+
+function mapBatchResults<TInput, TResult>(
+  normalizedSymbols: TInput[],
+  settled: Array<PromiseSettledResult<TResult>>,
+  buildError: (input: TInput, reason: unknown) => EtfBatchErrorItem
+): { results: TResult[]; errors: EtfBatchErrorItem[] } {
+  const results: TResult[] = [];
+  const errors: EtfBatchErrorItem[] = [];
+
+  for (let index = 0; index < settled.length; index++) {
+    const outcome = settled[index]!;
+    const input = normalizedSymbols[index]!;
+
+    if (outcome.status === "fulfilled") {
+      results.push(outcome.value);
+      continue;
+    }
+
+    errors.push(buildError(input, outcome.reason));
+  }
+
+  return { results, errors };
 }
 
 export async function runEtfQuote(
@@ -149,6 +259,145 @@ export async function runEtfAnalyze(
   } catch (error) {
     throw formatProviderError(normalized.provider, error);
   }
+}
+
+export async function runEtfBatchQuote(
+  input: EtfBatchInput,
+  providers: EtfProviderMap = createProviderMap(),
+  now: () => Date = () => new Date(),
+  context?: StockDataLogContext
+): Promise<EtfBatchQuoteResponse> {
+  const normalized = normalizeEtfBatchInput(input, "xueqiu");
+  const provider = providers[normalized.provider];
+
+  const settled = await settleWithConcurrency(
+    normalized.symbols,
+    DEFAULT_BATCH_CONCURRENCY,
+    async (s): Promise<EtfBatchQuoteItem> => {
+      const data = await provider.quote(s, context);
+      return {
+        symbol: s.symbol,
+        normalizedSymbol: s.normalizedSymbol.prefixed,
+        data
+      };
+    }
+  );
+
+  const { results, errors } = mapBatchResults(normalized.symbols, settled, (s, reason) =>
+    buildBatchErrorItem(s.symbol, normalized.provider, reason)
+  );
+
+  return {
+    source: normalized.provider,
+    generatedAt: buildGeneratedAt(now),
+    total: normalized.symbols.length,
+    successCount: results.length,
+    errorCount: errors.length,
+    results,
+    errors
+  };
+}
+
+export async function runEtfBatchKline(
+  input: EtfBatchKlineInput,
+  providers: EtfProviderMap = createProviderMap(),
+  now: () => Date = () => new Date(),
+  context?: StockDataLogContext
+): Promise<EtfBatchKlineResponse> {
+  const normalized = normalizeEtfBatchKlineInput(input, "xueqiu");
+  const provider = providers[normalized.provider];
+
+  const settled = await settleWithConcurrency(
+    normalized.symbols,
+    DEFAULT_BATCH_CONCURRENCY,
+    async (s): Promise<EtfBatchKlineItem> => {
+      const data = await provider.kline(s, context);
+      return {
+        symbol: s.symbol,
+        normalizedSymbol: s.normalizedSymbol.prefixed,
+        days: s.days,
+        count: data.length,
+        data
+      };
+    }
+  );
+
+  const { results, errors } = mapBatchResults(normalized.symbols, settled, (s, reason) =>
+    buildBatchErrorItem(s.symbol, normalized.provider, reason)
+  );
+
+  return {
+    source: normalized.provider,
+    generatedAt: buildGeneratedAt(now),
+    total: normalized.symbols.length,
+    successCount: results.length,
+    errorCount: errors.length,
+    results,
+    errors
+  };
+}
+
+export async function runEtfBatchAnalyze(
+  input: EtfBatchKlineInput,
+  providers: EtfProviderMap = createProviderMap(),
+  now: () => Date = () => new Date(),
+  context?: StockDataLogContext
+): Promise<EtfBatchAnalyzeResponse> {
+  const normalized = normalizeEtfBatchKlineInput(input, "xueqiu");
+  const provider = providers[normalized.provider];
+
+  const settled = await settleWithConcurrency(
+    normalized.symbols,
+    DEFAULT_BATCH_CONCURRENCY,
+    async (s): Promise<EtfBatchAnalyzeItem> => {
+      const [quote, kline] = await Promise.all([
+        provider.quote(s, context),
+        provider.kline({ ...s, days: Math.max(s.days, 30) }, context)
+      ]);
+
+      const closes = kline.map((item) => item.close);
+      const current = closes.at(-1);
+      if (current === undefined) {
+        throw new Error("empty kline data");
+      }
+
+      const ma5 = calculateAverage(closes.slice(-5));
+      const ma10 = calculateAverage(closes.slice(-10));
+      const ma20 = calculateAverage(closes.slice(-20));
+      const highs = kline.slice(-30).map((item) => item.high);
+      const lows = kline.slice(-30).map((item) => item.low);
+
+      return {
+        symbol: s.symbol,
+        normalizedSymbol: s.normalizedSymbol.prefixed,
+        quote,
+        indicators: {
+          current,
+          ma5,
+          ma10,
+          ma20,
+          high30: Math.max(...highs),
+          low30: Math.min(...lows),
+          trend: getTrend(current, ma5, ma10)
+        },
+        recentKlines: kline.slice(-10)
+      };
+    }
+  );
+
+  const { results, errors } = mapBatchResults(normalized.symbols, settled, (s, reason) =>
+    buildBatchErrorItem(s.symbol, normalized.provider, reason)
+  );
+
+  return {
+    source: normalized.provider,
+    generatedAt: buildGeneratedAt(now),
+    total: normalized.symbols.length,
+    successCount: results.length,
+    errorCount: errors.length,
+    results,
+    errors
+  };
 }
 
 export function buildKlineCloses(points: EtfKlinePoint[]): number[] {

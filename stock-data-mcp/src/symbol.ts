@@ -1,10 +1,14 @@
 import type {
   EtfInput,
   EtfKlineInput,
+  EtfBatchInput,
+  EtfBatchKlineInput,
   EtfProvider,
   SectorListInput,
   NormalizedEtfInput,
   NormalizedEtfKlineInput,
+  NormalizedEtfBatchInput,
+  NormalizedEtfBatchKlineInput,
   NormalizedSectorListInput,
   NormalizedSymbol
 } from "./types.js";
@@ -69,6 +73,41 @@ export function normalizeEtfKlineInput(
   return {
     ...normalizeEtfInput(input, defaultProvider),
     days: clamp(input.days ?? DEFAULT_KLINE_DAYS, MIN_KLINE_DAYS, MAX_KLINE_DAYS)
+  };
+}
+
+const MAX_BATCH_SYMBOLS = 20;
+
+export function normalizeEtfBatchInput(
+  input: EtfBatchInput,
+  defaultProvider: EtfProvider
+): NormalizedEtfBatchInput {
+  if (!input.symbols || input.symbols.length === 0) {
+    throw new Error("symbols must not be empty");
+  }
+  if (input.symbols.length > MAX_BATCH_SYMBOLS) {
+    throw new Error(`symbols count exceeds maximum of ${MAX_BATCH_SYMBOLS}`);
+  }
+  const provider = input.source ?? defaultProvider;
+  const timeoutMs = normalizeTimeoutSeconds(input.timeout) * 1000;
+  const symbols = input.symbols.map((symbol) => ({
+    symbol: symbol.trim(),
+    provider,
+    timeoutMs,
+    normalizedSymbol: normalizeSymbol(symbol)
+  }));
+  return { symbols, provider };
+}
+
+export function normalizeEtfBatchKlineInput(
+  input: EtfBatchKlineInput,
+  defaultProvider: EtfProvider
+): NormalizedEtfBatchKlineInput {
+  const normalized = normalizeEtfBatchInput(input, defaultProvider);
+  const days = clamp(input.days ?? DEFAULT_KLINE_DAYS, MIN_KLINE_DAYS, MAX_KLINE_DAYS);
+  return {
+    symbols: normalized.symbols.map((s) => ({ ...s, days })),
+    provider: normalized.provider
   };
 }
 

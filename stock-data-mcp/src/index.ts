@@ -5,6 +5,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   runEtfAnalyze,
+  runEtfBatchAnalyze,
+  runEtfBatchKline,
+  runEtfBatchQuote,
   runEtfKline,
   runEtfQuote,
   runSectorList
@@ -160,6 +163,89 @@ server.tool(
     try {
       const result = await runTool("etf_analyze", { symbol, source, days, timeout }, (requestId) =>
         runEtfAnalyze({ symbol, source, days, timeout }, undefined, undefined, { requestId })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "etf_batch_quote",
+  "批量获取多个 ETF 最新行情。支持 159930、510300 等代码格式，最多 20 个。",
+  {
+    symbols: z.array(z.string().min(1)).min(1).max(20).describe("List of ETF symbols such as [159930, 510300]."),
+    source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 15.")
+  },
+  async ({ symbols, source, timeout }) => {
+    try {
+      const result = await runTool("etf_batch_quote", { symbols, source, timeout }, (requestId) =>
+        runEtfBatchQuote({ symbols, source, timeout }, undefined, undefined, { requestId })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "etf_batch_kline",
+  "批量获取多个 ETF 历史日 K 线数据。最多 20 个。",
+  {
+    symbols: z.array(z.string().min(1)).min(1).max(20).describe("List of ETF symbols such as [159930, 510300]."),
+    source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
+    days: z.number().int().min(5).max(180).optional().describe("Optional day count. Defaults to 30."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 15.")
+  },
+  async ({ symbols, source, days, timeout }) => {
+    try {
+      const result = await runTool("etf_batch_kline", { symbols, source, days, timeout }, (requestId) =>
+        runEtfBatchKline({ symbols, source, days, timeout }, undefined, undefined, { requestId })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "etf_batch_analyze",
+  "批量分析多个 ETF，包含 MA5、MA10、MA20、30 日高低点及简单趋势标签。最多 20 个。",
+  {
+    symbols: z.array(z.string().min(1)).min(1).max(20).describe("List of ETF symbols such as [159930, 510300]."),
+    source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
+    days: z.number().int().min(20).max(180).optional().describe("Optional day count. Defaults to 30."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 15.")
+  },
+  async ({ symbols, source, days, timeout }) => {
+    try {
+      const result = await runTool("etf_batch_analyze", { symbols, source, days, timeout }, (requestId) =>
+        runEtfBatchAnalyze({ symbols, source, days, timeout }, undefined, undefined, { requestId })
       );
       return {
         content: [

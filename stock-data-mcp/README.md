@@ -17,6 +17,22 @@
   - 返回 ETF 技术分析结果
   - 包含 `MA5`、`MA10`、`MA20`、`30日最高`、`30日最低`、趋势标签
   - 默认 provider：`xueqiu`
+- `etf_batch_quote`
+  - 批量获取多个 ETF 最新行情
+  - 最多支持 20 个 symbol
+  - 部分失败时返回 `results`（成功列表）和 `errors`（失败列表）
+  - 默认 provider：`xueqiu`
+- `etf_batch_kline`
+  - 批量获取多个 ETF 日 K 数据
+  - 最多支持 20 个 symbol
+  - 部分失败时返回 `results` 和 `errors`
+  - 默认 provider：`xueqiu`
+- `etf_batch_analyze`
+  - 批量分析多个 ETF
+  - 包含 `MA5`、`MA10`、`MA20`、`30日最高`、`30日最低`、趋势标签
+  - 最多支持 20 个 symbol
+  - 部分失败时返回 `results` 和 `errors`
+  - 默认 provider：`xueqiu`
 - `etf_list`
   - 获取 ETF 列表
   - 默认按涨幅从高到低排序，也可以切换到跌幅、成交量、成交额、换手率排序
@@ -123,6 +139,36 @@ npm run build
 }
 ```
 
+`etf_batch_quote`:
+
+```json
+{
+  "symbols": ["159930", "510300"],
+  "source": "xueqiu",
+  "timeout": 15
+}
+```
+
+`etf_batch_kline`:
+
+```json
+{
+  "symbols": ["159930", "510300"],
+  "days": 30,
+  "timeout": 15
+}
+```
+
+`etf_batch_analyze`:
+
+```json
+{
+  "symbols": ["159930", "510300"],
+  "days": 30,
+  "timeout": 15
+}
+```
+
 `etf_list`:
 
 ```json
@@ -187,6 +233,33 @@ npm run build
 - `quote`
 - `indicators`
 - `recentKlines`
+
+`etf_batch_quote` 返回：
+
+- `source`
+- `total`
+- `successCount`
+- `errorCount`
+- `results`（每个 symbol 的行情数据）
+- `errors`（失败的 symbol、错误信息，以及可选的 `code` / `retryable`）
+
+`etf_batch_kline` 返回：
+
+- `source`
+- `total`
+- `successCount`
+- `errorCount`
+- `results`（每个 symbol 的 K 线数据）
+- `errors`（失败项同上）
+
+`etf_batch_analyze` 返回：
+
+- `source`
+- `total`
+- `successCount`
+- `errorCount`
+- `results`（每个 symbol 的 `quote`、`indicators`、`recentKlines`）
+- `errors`（失败项同上）
 
 `etf_list` 返回：
 

@@ -11,6 +11,16 @@ export type EtfKlineInput = EtfInput & {
   days?: number;
 };
 
+export type EtfBatchInput = {
+  symbols: string[];
+  source?: EtfProvider;
+  timeout?: number;
+};
+
+export type EtfBatchKlineInput = EtfBatchInput & {
+  days?: number;
+};
+
 export type SectorListSortBy = "gainers" | "losers" | "hot";
 
 export type SectorListInput = {
@@ -30,6 +40,16 @@ export type NormalizedEtfInput = {
 
 export type NormalizedEtfKlineInput = NormalizedEtfInput & {
   days: number;
+};
+
+export type NormalizedEtfBatchInput = {
+  symbols: NormalizedEtfInput[];
+  provider: EtfProvider;
+};
+
+export type NormalizedEtfBatchKlineInput = {
+  symbols: NormalizedEtfKlineInput[];
+  provider: EtfProvider;
 };
 
 export type NormalizedSectorListInput = {
@@ -92,6 +112,75 @@ export type EtfKlineResponse = {
   days: number;
   count: number;
   data: EtfKlinePoint[];
+};
+
+export type EtfBatchErrorItem = {
+  symbol: string;
+  error: string;
+  code?: EtfBatchErrorCode;
+  retryable?: boolean;
+};
+
+export type EtfBatchErrorCode = "invalid_input" | "timeout" | "upstream_error" | "internal_error";
+
+export type EtfBatchQuoteItem = {
+  symbol: string;
+  normalizedSymbol: string;
+  data: EtfQuote;
+};
+
+export type EtfBatchQuoteResponse = {
+  source: EtfProvider;
+  generatedAt: string;
+  total: number;
+  successCount: number;
+  errorCount: number;
+  results: EtfBatchQuoteItem[];
+  errors: EtfBatchErrorItem[];
+};
+
+export type EtfBatchKlineItem = {
+  symbol: string;
+  normalizedSymbol: string;
+  days: number;
+  count: number;
+  data: EtfKlinePoint[];
+};
+
+export type EtfBatchKlineResponse = {
+  source: EtfProvider;
+  generatedAt: string;
+  total: number;
+  successCount: number;
+  errorCount: number;
+  results: EtfBatchKlineItem[];
+  errors: EtfBatchErrorItem[];
+};
+
+export type EtfBatchAnalyzeItem = {
+  symbol: string;
+  normalizedSymbol: string;
+  quote: EtfQuote;
+  indicators: {
+    current: number;
+    ma5: number | null;
+    ma10: number | null;
+    ma20: number | null;
+    high30: number;
+    low30: number;
+    trend: string;
+  };
+  recentKlines: EtfKlinePoint[];
+};
+
+export type EtfBatchAnalyzeResponse = {
+  source: EtfProvider;
+  generatedAt: string;
+  total: number;
+  successCount: number;
+  errorCount: number;
+  results: EtfBatchAnalyzeItem[];
+  errors: EtfBatchErrorItem[];
 };
 
 export type EtfAnalyzeResponse = {

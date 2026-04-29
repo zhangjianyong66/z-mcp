@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   buildKlineCloses,
   runEtfAnalyze,
+  runEtfBatchAnalyze,
+  runEtfBatchKline,
+  runEtfBatchQuote,
   runEtfKline,
   runEtfQuote,
   runSectorList
@@ -74,6 +77,180 @@ test("runEtfAnalyze uses default xueqiu provider and computes indicators", async
   assert.equal(response.recentKlines.length, 10);
   assert.ok(response.indicators.ma5 !== null);
   assert.ok(response.indicators.high30 >= response.indicators.low30);
+});
+
+test("runEtfBatchQuote returns results and errors for multiple symbols", async () => {
+  const response = await runEtfBatchQuote(
+    { symbols: ["159930", "510300"] },
+    mockProviders,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.source, "xueqiu");
+  assert.equal(response.total, 2);
+  assert.equal(response.successCount, 2);
+  assert.equal(response.errorCount, 0);
+  assert.equal(response.results.length, 2);
+  assert.equal(response.results[0]?.symbol, "159930");
+  assert.equal(response.results[1]?.symbol, "510300");
+  assert.equal(response.errors.length, 0);
+});
+
+test("runEtfBatchQuote returns partial results when some symbols fail", async () => {
+  const failingProviders = {
+    xueqiu: {
+      quote: async (input: { normalizedSymbol: { code: string } }) => {
+        if (input.normalizedSymbol.code === "510300") {
+          throw new Error("network error");
+        }
+        return mockProviders.xueqiu.quote(input as never);
+      },
+      kline: mockProviders.xueqiu.kline
+    }
+  };
+
+  const response = await runEtfBatchQuote(
+    { symbols: ["159930", "510300"] },
+    failingProviders,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.total, 2);
+  assert.equal(response.successCount, 1);
+  assert.equal(response.errorCount, 1);
+  assert.equal(response.results[0]?.symbol, "159930");
+  assert.equal(response.errors[0]?.symbol, "510300");
+  assert.ok(response.errors[0]?.error.includes("xueqiu request failed"));
+});
+
+test("runEtfBatchQuote preserves input order and limits concurrency", async () => {
+  let active = 0;
+  let maxActive = 0;
+
+  const delays = new Map([
+    ["159930", 50],
+    ["510300", 40],
+    ["510050", 30],
+    ["512980", 20],
+    ["513100", 10],
+    ["510500", 5]
+  ]);
+
+  const provider = {
+    xueqiu: {
+      quote: async (input: { normalizedSymbol: { code: string } }) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        try {
+          await new Promise((resolve) => setTimeout(resolve, delays.get(input.normalizedSymbol.code) ?? 15));
+          return mockProviders.xueqiu.quote(input as never);
+        } finally {
+          active -= 1;
+        }
+      },
+      kline: mockProviders.xueqiu.kline
+    }
+  };
+
+  const symbols = ["159930", "510300", "510050", "512980", "513100", "510500"];
+  const response = await runEtfBatchQuote(
+    { symbols },
+    provider,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.successCount, symbols.length);
+  assert.equal(response.errorCount, 0);
+  assert.deepEqual(response.results.map((item) => item.symbol), symbols);
+  assert.ok(maxActive <= 5);
+});
+
+test("runEtfBatchQuote classifies batch errors", async () => {
+  const provider = {
+    xueqiu: {
+      quote: async (input: { normalizedSymbol: { code: string } }) => {
+        if (input.normalizedSymbol.code === "510300") {
+          throw new Error("The operation was aborted due to timeout");
+        }
+        if (input.normalizedSymbol.code === "510050") {
+          throw new Error("fetch failed");
+        }
+        return mockProviders.xueqiu.quote(input as never);
+      },
+      kline: mockProviders.xueqiu.kline
+    }
+  };
+
+  const response = await runEtfBatchQuote(
+    { symbols: ["159930", "510300", "510050"] },
+    provider,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.successCount, 1);
+  assert.equal(response.errorCount, 2);
+  assert.equal(response.errors[0]?.symbol, "510300");
+  assert.equal(response.errors[0]?.code, "timeout");
+  assert.equal(response.errors[0]?.retryable, true);
+  assert.equal(response.errors[1]?.symbol, "510050");
+  assert.equal(response.errors[1]?.code, "upstream_error");
+  assert.equal(response.errors[1]?.retryable, true);
+});
+
+test("runEtfBatchKline returns results for multiple symbols", async () => {
+  const response = await runEtfBatchKline(
+    { symbols: ["159930", "510300"], days: 7 },
+    mockProviders,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.source, "xueqiu");
+  assert.equal(response.total, 2);
+  assert.equal(response.successCount, 2);
+  assert.equal(response.results.length, 2);
+  assert.equal(response.results[0]?.days, 7);
+  assert.equal(response.results[0]?.count, 7);
+});
+
+test("runEtfBatchAnalyze returns indicators for multiple symbols", async () => {
+  const response = await runEtfBatchAnalyze(
+    { symbols: ["159930", "510300"], days: 30 },
+    mockProviders,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.source, "xueqiu");
+  assert.equal(response.total, 2);
+  assert.equal(response.successCount, 2);
+  assert.equal(response.results.length, 2);
+  assert.ok(response.results[0]!.indicators.ma5 !== null);
+  assert.ok(response.results[1]!.indicators.ma5 !== null);
+});
+
+test("runEtfBatchAnalyze returns partial results when some symbols fail", async () => {
+  const failingProviders = {
+    xueqiu: {
+      quote: async (input: { normalizedSymbol: { code: string } }) => {
+        if (input.normalizedSymbol.code === "510300") {
+          throw new Error("network error");
+        }
+        return mockProviders.xueqiu.quote(input as never);
+      },
+      kline: mockProviders.xueqiu.kline
+    }
+  };
+
+  const response = await runEtfBatchAnalyze(
+    { symbols: ["159930", "510300"], days: 30 },
+    failingProviders,
+    () => new Date("2026-04-12T03:30:00.000Z")
+  );
+
+  assert.equal(response.total, 2);
+  assert.equal(response.successCount, 1);
+  assert.equal(response.errorCount, 1);
+  assert.equal(response.results[0]?.symbol, "159930");
+  assert.equal(response.errors[0]?.symbol, "510300");
 });
 
 test("buildKlineCloses returns close values in order", () => {
