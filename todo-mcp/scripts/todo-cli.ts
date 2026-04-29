@@ -65,6 +65,12 @@ function formatDate(iso: string | undefined): string {
   });
 }
 
+function truncateSingleLine(text: string, maxChars: number): string {
+  if (maxChars <= 1) return "…";
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars - 1)}…`;
+}
+
 // ---------- 数据层 ----------
 
 async function loadPlans(): Promise<PlanWithProgress[]> {
@@ -167,9 +173,10 @@ function printPlanList(
   console.log("==================");
 }
 
-function printPlanDetail(
+function printPlanTaskList(
   tree: PlanTree,
   filter: PlanFilter,
+  selectedIndex: number,
   pageSize: number,
   currentPage: number
 ) {
@@ -189,7 +196,7 @@ function printPlanDetail(
   }
   console.log("==================");
   console.log(`按 [Tab] 切换: ${filterLabel}`);
-  console.log("按 [q] 返回");
+  console.log("按 [↑↓] 选择  [Enter] 进入任务  [q] 返回");
   if (filtered.tasks.length > pageSize) {
     console.log(`按 [ ] 翻页: 第 ${currentPage + 1}/${totalPages} 页`);
   }
@@ -204,20 +211,62 @@ function printPlanDetail(
     );
     console.log("");
 
-    for (const task of pageTasks) {
+    for (let i = 0; i < pageTasks.length; i++) {
+      const task = pageTasks[i];
+      const globalIndex = start + i;
+      const cursor = globalIndex === selectedIndex ? ">" : " ";
       const due = task.due_date ? ` (due ${formatDate(task.due_date)})` : "";
-      console.log(`  ${statusIcon(task.status === "done")} [P${task.priority}] ${task.title}${due}`);
+      console.log(`${cursor} ${statusIcon(task.status === "done")} [P${task.priority}] ${task.title}${due}`);
+    }
+  }
 
-      if (task.subtasks.length > 0) {
-        for (const sub of task.subtasks) {
-          const subDue = sub.due_date ? ` (due ${formatDate(sub.due_date)})` : "";
-          console.log(`      ${statusIcon(sub.status === "done")} [P${sub.priority}] ${sub.title}${subDue}`);
-        }
-      }
+  console.log("");
+  console.log("==================");
+}
 
-      if (task.note) {
-        console.log(`      Note: ${task.note}`);
-      }
+function printTaskDetail(
+  tree: PlanTree,
+  task: PlanTreeTask,
+  filter: PlanFilter,
+  detailPage: number,
+  detailPageSize: number,
+  termCols: number
+) {
+  const plan = tree.plan;
+  const filterLabel = filter === "todo" ? "未完成" : "已完成";
+  const filteredSubtasks = task.subtasks.filter((sub) => sub.status === filter);
+  const totalPages = Math.max(1, Math.ceil(filteredSubtasks.length / detailPageSize));
+  const safePage = Math.max(0, Math.min(detailPage, totalPages - 1));
+  const start = safePage * detailPageSize;
+  const end = Math.min(start + detailPageSize, filteredSubtasks.length);
+  const pageSubtasks = filteredSubtasks.slice(start, end);
+  const maxTitleChars = Math.max(12, termCols - 14);
+
+  clearScreen();
+  console.log("==================");
+  console.log(`${plan.title} [${plan.status}]`);
+  console.log("==================");
+  console.log(`按 [Tab] 切换: ${filterLabel}`);
+  console.log("按 [Enter/q] 返回任务列表");
+  if (filteredSubtasks.length > detailPageSize) {
+    console.log(`按 [ ] 翻页: 第 ${safePage + 1}/${totalPages} 页`);
+  }
+  console.log("");
+
+  const due = task.due_date ? ` (due ${formatDate(task.due_date)})` : "";
+  console.log(`  ${statusIcon(task.status === "done")} [P${task.priority}] ${task.title}${due}`);
+  if (task.note) {
+    console.log(`  Note: ${truncateSingleLine(task.note, Math.max(12, termCols - 8))}`);
+  }
+  console.log("");
+
+  if (filteredSubtasks.length === 0) {
+    console.log("  (无子任务)");
+  } else {
+    for (const sub of pageSubtasks) {
+      const subDue = sub.due_date ? ` (due ${formatDate(sub.due_date)})` : "";
+      const line = `  ${statusIcon(sub.status === "done")} [P${sub.priority}] ${sub.title}${subDue}`;
+      console.log(truncateSingleLine(line, Math.max(12, maxTitleChars)));
     }
   }
 
@@ -348,17 +397,49 @@ async function planDetailPage(planId: string) {
   const tree = await service.getPlanTree(planId);
 
   return new Promise<void>((resolve) => {
+    type DetailMode = "task_list" | "task_detail";
+    let mode: DetailMode = "task_list";
     let filter: PlanFilter = "todo";
+    let selectedIndex = 0;
     let currentPage = 0;
     const pageSize = Math.max(5, (process.stdout.rows || 20) - 10);
+    const detailPageSize = Math.max(3, (process.stdout.rows || 20) - 13);
+    const termCols = process.stdout.columns || 80;
+    let currentTaskId: string | null = null;
+    let detailPage = 0;
 
     const getTotalPages = () => {
       const filtered = filterTree(tree, filter);
       return Math.max(1, Math.ceil(filtered.tasks.length / pageSize));
     };
 
+    const getFilteredTasks = () => filterTree(tree, filter).tasks;
+
+    const clampSelection = () => {
+      const filteredTasks = getFilteredTasks();
+      const totalPages = getTotalPages();
+      if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+      if (selectedIndex >= filteredTasks.length) selectedIndex = Math.max(0, filteredTasks.length - 1);
+      if (selectedIndex < 0) selectedIndex = 0;
+    };
+
     const render = () => {
-      printPlanDetail(tree, filter, pageSize, currentPage);
+      clampSelection();
+      const filteredTasks = getFilteredTasks();
+      if (mode === "task_detail") {
+        const task = currentTaskId ? filteredTasks.find((t) => t.id === currentTaskId) : undefined;
+        if (!task) {
+          mode = "task_list";
+          printPlanTaskList(tree, filter, selectedIndex, pageSize, currentPage);
+          return;
+        }
+        const filteredSubtasks = task.subtasks.filter((sub) => sub.status === filter);
+        const totalDetailPages = Math.max(1, Math.ceil(filteredSubtasks.length / detailPageSize));
+        if (detailPage >= totalDetailPages) detailPage = Math.max(0, totalDetailPages - 1);
+        printTaskDetail(tree, task, filter, detailPage, detailPageSize, termCols);
+        return;
+      }
+      printPlanTaskList(tree, filter, selectedIndex, pageSize, currentPage);
     };
 
     const onKeypress = (str: string, key: { name?: string; ctrl?: boolean }) => {
@@ -369,29 +450,87 @@ async function planDetailPage(planId: string) {
 
       if (key.name === "tab") {
         filter = filter === "todo" ? "done" : "todo";
-        currentPage = 0;
+        if (mode === "task_list") {
+          currentPage = 0;
+          selectedIndex = 0;
+        } else {
+          detailPage = 0;
+        }
+        render();
+        return;
+      }
+
+      if (mode === "task_list" && key.name === "up") {
+        selectedIndex = Math.max(currentPage * pageSize, selectedIndex - 1);
+        render();
+        return;
+      }
+
+      if (mode === "task_list" && key.name === "down") {
+        const filteredTasks = getFilteredTasks();
+        const end = Math.min(filteredTasks.length, (currentPage + 1) * pageSize) - 1;
+        selectedIndex = Math.min(end, selectedIndex + 1);
         render();
         return;
       }
 
       if (str === "[" || key.name === "pageup") {
-        if (currentPage > 0) {
-          currentPage--;
+        if (mode === "task_list") {
+          if (currentPage > 0) {
+            currentPage--;
+            selectedIndex = currentPage * pageSize;
+            render();
+          }
+        } else if (detailPage > 0) {
+          detailPage--;
           render();
         }
         return;
       }
 
       if (str === "]" || key.name === "pagedown") {
-        const totalPages = getTotalPages();
-        if (currentPage < totalPages - 1) {
-          currentPage++;
-          render();
+        if (mode === "task_list") {
+          const totalPages = getTotalPages();
+          if (currentPage < totalPages - 1) {
+            currentPage++;
+            selectedIndex = currentPage * pageSize;
+            render();
+          }
+        } else {
+          const filteredTasks = getFilteredTasks();
+          const task = currentTaskId ? filteredTasks.find((t) => t.id === currentTaskId) : undefined;
+          const subtaskCount = task ? task.subtasks.filter((sub) => sub.status === filter).length : 0;
+          const totalDetailPages = Math.max(1, Math.ceil(subtaskCount / detailPageSize));
+          if (detailPage < totalDetailPages - 1) {
+            detailPage++;
+            render();
+          }
         }
         return;
       }
 
+      if (key.name === "return") {
+        if (mode === "task_list") {
+          const filteredTasks = getFilteredTasks();
+          if (filteredTasks.length > 0 && selectedIndex < filteredTasks.length) {
+            currentTaskId = filteredTasks[selectedIndex].id;
+            detailPage = 0;
+            mode = "task_detail";
+            render();
+          }
+          return;
+        }
+        mode = "task_list";
+        render();
+        return;
+      }
+
       if (str === "q" || key.name === "escape") {
+        if (mode === "task_detail") {
+          mode = "task_list";
+          render();
+          return;
+        }
         runCleanup();
         resolve();
         return;

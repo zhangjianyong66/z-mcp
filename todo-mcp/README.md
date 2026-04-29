@@ -6,7 +6,9 @@
 
 - `create_plan` / `update_plan` / `archive_plan` / `delete_plan` / `get_plan` / `list_plans`
 - `create_task` / `update_task` / `complete_task` / `delete_task` / `get_task` / `list_tasks` / `reorder_task`
+- `batch_create_tasks` / `batch_update_tasks` / `batch_complete_tasks` / `batch_delete_tasks`
 - `create_subtask` / `update_subtask` / `complete_subtask` / `delete_subtask` / `get_subtask` / `list_subtasks` / `reorder_subtask`
+- `batch_create_subtasks` / `batch_update_subtasks` / `batch_complete_subtasks` / `batch_delete_subtasks`
 - `get_plan_tree`：查询计划树
 - `get_plan_progress`：查询计划进度汇总
 
@@ -60,7 +62,73 @@ npm run build
   - 所有子任务完成 -> 父任务自动 `done`
   - 存在未完成子任务 -> 父任务自动 `todo`
 
+## 批量操作规则
+
+- 全事务回滚：任一 item 校验失败则整体回滚
+- 单次上限：items / ids 数组最多 50 条
+- 不支持重复 ID：`task_ids` / `subtask_ids` 或更新列表中的 `task_id` / `subtask_id` 不可重复
+- 不支持空更新项：`batch_update_tasks` / `batch_update_subtasks` 每个 item 必须至少包含一个更新字段
+- 不支持部分成功：失败即整批失败，不会返回部分成功结果
+- 成功返回格式：`{ success_count, items }`
+- 失败返回格式：统一错误对象，`details` 中按可用性包含 `item_index` 与 `item_id`
+
 ## 示例
+
+批量创建任务：
+
+```json
+{
+  "tool": "batch_create_tasks",
+  "arguments": {
+    "plan_id": "<plan-id>",
+    "items": [
+      { "title": "任务 A", "priority": 1 },
+      { "title": "任务 B", "note": "备注" }
+    ]
+  }
+}
+```
+
+批量完成子任务：
+
+```json
+{
+  "tool": "batch_complete_subtasks",
+  "arguments": {
+    "subtask_ids": ["<id-1>", "<id-2>"],
+    "done": true
+  }
+}
+```
+
+批量成功响应示例：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "success_count": 2,
+    "items": [{ "id": "<id-1>" }, { "id": "<id-2>" }]
+  },
+  "request_meta": {
+    "tool": "batch_complete_subtasks",
+    "generated_at": "2026-04-28T00:00:00.000Z"
+  }
+}
+```
+
+批量失败响应示例（重复 ID）：
+
+```json
+{
+  "code": "invalid_input",
+  "message": "task_id cannot contain duplicates",
+  "details": {
+    "item_index": 1,
+    "item_id": "<duplicate-task-id>"
+  }
+}
+```
 
 创建计划：
 

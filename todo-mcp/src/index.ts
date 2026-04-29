@@ -36,6 +36,13 @@ function toToolResult<T>(tool: string, data: T): { content: Array<{ type: "text"
   };
 }
 
+function toBatchResult<T>(tool: string, items: T[]): { content: Array<{ type: "text"; text: string }> } {
+  return toToolResult(tool, {
+    success_count: items.length,
+    items
+  });
+}
+
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
   if (error instanceof AppError) {
     return {
@@ -202,6 +209,34 @@ server.tool(
 );
 
 server.tool(
+  "batch_create_tasks",
+  "在同一计划下批量创建主任务。",
+  {
+    plan_id: z.string().min(1).describe("计划 ID"),
+    items: z
+      .array(
+        z.object({
+          title: z.string().trim().min(1).describe("任务标题"),
+          note: z.string().optional().describe("任务备注"),
+          priority: z.number().int().min(1).optional().describe("优先级数字，越小越高，默认 5"),
+          due_date: z.string().optional().describe("截止时间，ISO 8601")
+        })
+      )
+      .min(1)
+      .max(50)
+      .describe("任务列表，最多 50 条")
+  },
+  async ({ plan_id, items }) => {
+    try {
+      const tasks = await service.batchCreateTasks(plan_id, items);
+      return toBatchResult("batch_create_tasks", tasks);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
   "update_task",
   "更新主任务。",
   {
@@ -215,6 +250,34 @@ server.tool(
     try {
       const task = await service.updateTask(task_id, { title, note, priority, due_date });
       return toToolResult("update_task", task);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "batch_update_tasks",
+  "批量更新主任务。",
+  {
+    items: z
+      .array(
+        z.object({
+          task_id: z.string().min(1).describe("任务 ID"),
+          title: z.string().trim().min(1).optional().describe("任务标题"),
+          note: z.string().optional().describe("任务备注，传空字符串可清空"),
+          priority: z.number().int().min(1).optional().describe("优先级数字，越小越高"),
+          due_date: z.string().optional().describe("截止时间，传空字符串可清空")
+        })
+      )
+      .min(1)
+      .max(50)
+      .describe("更新列表，最多 50 条")
+  },
+  async ({ items }) => {
+    try {
+      const tasks = await service.batchUpdateTasks(items);
+      return toBatchResult("batch_update_tasks", tasks);
     } catch (error) {
       return toToolError(error);
     }
@@ -239,6 +302,23 @@ server.tool(
 );
 
 server.tool(
+  "batch_complete_tasks",
+  "批量完成或取消完成主任务（有子任务的任务不允许手动完成）。",
+  {
+    task_ids: z.array(z.string().min(1)).min(1).max(50).describe("任务 ID 列表，最多 50 条"),
+    done: z.boolean().optional().describe("是否完成，默认 true")
+  },
+  async ({ task_ids, done }) => {
+    try {
+      const tasks = await service.batchCompleteTasks(task_ids, done ?? true);
+      return toBatchResult("batch_complete_tasks", tasks);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
   "delete_task",
   "软删除主任务及其子任务。",
   {
@@ -248,6 +328,22 @@ server.tool(
     try {
       const task = await service.deleteTask(task_id);
       return toToolResult("delete_task", task);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "batch_delete_tasks",
+  "批量软删除主任务及其子任务。",
+  {
+    task_ids: z.array(z.string().min(1)).min(1).max(50).describe("任务 ID 列表，最多 50 条")
+  },
+  async ({ task_ids }) => {
+    try {
+      const tasks = await service.batchDeleteTasks(task_ids);
+      return toBatchResult("batch_delete_tasks", tasks);
     } catch (error) {
       return toToolError(error);
     }
@@ -329,6 +425,34 @@ server.tool(
 );
 
 server.tool(
+  "batch_create_subtasks",
+  "在同一任务下批量创建子任务。",
+  {
+    task_id: z.string().min(1).describe("父任务 ID"),
+    items: z
+      .array(
+        z.object({
+          title: z.string().trim().min(1).describe("子任务标题"),
+          note: z.string().optional().describe("子任务备注"),
+          priority: z.number().int().min(1).optional().describe("优先级数字，越小越高，默认 5"),
+          due_date: z.string().optional().describe("截止时间，ISO 8601")
+        })
+      )
+      .min(1)
+      .max(50)
+      .describe("子任务列表，最多 50 条")
+  },
+  async ({ task_id, items }) => {
+    try {
+      const subtasks = await service.batchCreateSubtasks(task_id, items);
+      return toBatchResult("batch_create_subtasks", subtasks);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
   "update_subtask",
   "更新子任务。",
   {
@@ -342,6 +466,34 @@ server.tool(
     try {
       const subtask = await service.updateSubtask(subtask_id, { title, note, priority, due_date });
       return toToolResult("update_subtask", subtask);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "batch_update_subtasks",
+  "批量更新子任务。",
+  {
+    items: z
+      .array(
+        z.object({
+          subtask_id: z.string().min(1).describe("子任务 ID"),
+          title: z.string().trim().min(1).optional().describe("子任务标题"),
+          note: z.string().optional().describe("子任务备注，传空字符串可清空"),
+          priority: z.number().int().min(1).optional().describe("优先级数字，越小越高"),
+          due_date: z.string().optional().describe("截止时间，传空字符串可清空")
+        })
+      )
+      .min(1)
+      .max(50)
+      .describe("更新列表，最多 50 条")
+  },
+  async ({ items }) => {
+    try {
+      const subtasks = await service.batchUpdateSubtasks(items);
+      return toBatchResult("batch_update_subtasks", subtasks);
     } catch (error) {
       return toToolError(error);
     }
@@ -366,6 +518,23 @@ server.tool(
 );
 
 server.tool(
+  "batch_complete_subtasks",
+  "批量完成或取消完成子任务（会自动更新父任务状态）。",
+  {
+    subtask_ids: z.array(z.string().min(1)).min(1).max(50).describe("子任务 ID 列表，最多 50 条"),
+    done: z.boolean().optional().describe("是否完成，默认 true")
+  },
+  async ({ subtask_ids, done }) => {
+    try {
+      const subtasks = await service.batchCompleteSubtasks(subtask_ids, done ?? true);
+      return toBatchResult("batch_complete_subtasks", subtasks);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
   "delete_subtask",
   "软删除子任务。",
   {
@@ -375,6 +544,22 @@ server.tool(
     try {
       const subtask = await service.deleteSubtask(subtask_id);
       return toToolResult("delete_subtask", subtask);
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "batch_delete_subtasks",
+  "批量软删除子任务（会自动更新父任务状态）。",
+  {
+    subtask_ids: z.array(z.string().min(1)).min(1).max(50).describe("子任务 ID 列表，最多 50 条")
+  },
+  async ({ subtask_ids }) => {
+    try {
+      const subtasks = await service.batchDeleteSubtasks(subtask_ids);
+      return toBatchResult("batch_delete_subtasks", subtasks);
     } catch (error) {
       return toToolError(error);
     }
