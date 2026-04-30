@@ -17,6 +17,7 @@ import {
   logStockDataEvent
 } from "./logging.js";
 import { warmXueqiuCookie } from "./providers/xueqiu.js";
+import { getPortfolioAndOrders, saveOrders, savePortfolio } from "./portfolio-store.js";
 
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
   const message = error instanceof Error ? error.message : String(error);
@@ -94,6 +95,26 @@ configureStockDataLogging(server);
 
 const providerSchema = z.enum(["xueqiu"]);
 const sectorListSortSchema = z.enum(["gainers", "losers", "hot"]);
+const isoDatetimeSchema = z.string().datetime({ offset: true });
+
+const portfolioPositionSchema = z.object({
+  symbol: z.string().min(1),
+  name: z.string().min(1),
+  quantity: z.number().positive(),
+  costPrice: z.number().min(0),
+  currentPrice: z.number().min(0),
+  marketValue: z.number().min(0)
+});
+
+const portfolioOrderSchema = z.object({
+  orderId: z.string().min(1).optional(),
+  symbol: z.string().min(1),
+  name: z.string().min(1),
+  side: z.enum(["buy", "sell"]),
+  quantity: z.number().positive(),
+  orderTime: isoDatetimeSchema,
+  status: z.enum(["pending", "filled", "cancelled", "expired"])
+});
 
 server.tool(
   "etf_quote",
@@ -246,6 +267,94 @@ server.tool(
     try {
       const result = await runTool("etf_batch_analyze", { symbols, source, days, timeout }, (requestId) =>
         runEtfBatchAnalyze({ symbols, source, days, timeout }, undefined, undefined, { requestId })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "save_portfolio_info",
+  "保存或更新我的持仓信息（全量覆盖）。",
+  {
+    totalCapital: z.number().min(0).describe("总资金"),
+    availableCapital: z.number().min(0).describe("可用资金"),
+    positions: z.array(portfolioPositionSchema).describe("持仓列表"),
+    updatedAt: isoDatetimeSchema.optional().describe("可选更新时间（ISO-8601，带时区）")
+  },
+  async ({ totalCapital, availableCapital, positions, updatedAt }) => {
+    try {
+      const result = await runTool(
+        "save_portfolio_info",
+        { totalCapital, availableCapital, positionsCount: positions.length, updatedAt },
+        async () =>
+          savePortfolio({
+            totalCapital,
+            availableCapital,
+            positions,
+            updatedAt
+          })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "save_trade_orders",
+  "保存或更新我的交易单信息（全量覆盖）。挂单若跨自然日会自动失效。",
+  {
+    orders: z.array(portfolioOrderSchema).describe("交易单列表")
+  },
+  async ({ orders }) => {
+    try {
+      const result = await runTool(
+        "save_trade_orders",
+        { ordersCount: orders.length },
+        async () => saveOrders(orders)
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "get_portfolio_and_orders",
+  "获取我的持仓和交易单信息。挂单若跨自然日会自动失效。",
+  {},
+  async () => {
+    try {
+      const result = await runTool(
+        "get_portfolio_and_orders",
+        {},
+        async () => getPortfolioAndOrders()
       );
       return {
         content: [

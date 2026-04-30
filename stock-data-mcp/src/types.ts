@@ -242,3 +242,66 @@ export type SectorSnapshotItem = Omit<SectorListItem, "marketScore" | "newsScore
 export type SectorProviderApi = {
   listIndustrySummary(input: NormalizedSectorListInput, context?: StockDataLogContext): Promise<SectorSnapshotItem[]>;
 };
+
+export type PortfolioPosition = {
+  symbol: string;
+  name: string;
+  quantity: number;
+  costPrice: number;
+  currentPrice: number;
+  marketValue: number;
+};
+
+export type PortfolioInfo = {
+  totalCapital: number;
+  availableCapital: number;
+  positions: PortfolioPosition[];
+  updatedAt: string;
+};
+
+export type PortfolioOrderStatus = "pending" | "filled" | "cancelled" | "expired";
+export type PortfolioOrderSide = "buy" | "sell";
+
+export type PortfolioOrder = {
+  orderId?: string;
+  symbol: string;
+  name: string;
+  side: PortfolioOrderSide;
+  quantity: number;
+  orderTime: string;
+  status: PortfolioOrderStatus;
+};
+
+export type PortfolioData = {
+  portfolio: PortfolioInfo | null;
+  orders: PortfolioOrder[];
+};
+
+export type PortfolioOrderStats = {
+  total: number;
+  pending: number;
+  filled: number;
+  cancelled: number;
+  expired: number;
+};
+
+export type PortfolioSnapshot = {
+  portfolio: PortfolioInfo | null;
+  orders: PortfolioOrder[];
+  stats: PortfolioOrderStats;
+  generatedAt: string;
+  autoExpiredOrderCount?: number;
+  message?: string;
+};
+
+export type SavePortfolioResult = {
+  portfolio: PortfolioInfo;
+  warnings: string[];
+  autoExpiredOrderCount: number;
+};
+
+export type SaveOrdersResult = {
+  orders: PortfolioOrder[];
+  stats: PortfolioOrderStats;
+  autoExpiredOrderCount: number;
+};

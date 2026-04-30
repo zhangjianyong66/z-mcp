@@ -24,6 +24,14 @@ type AkshareProviderOptions = {
   scriptPath?: string;
 };
 
+function resolvePythonBin(): string {
+  const fromEnv = process.env.AKSHARE_PYTHON_BIN?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  return "python3";
+}
+
 function resolveScriptPath(explicitPath?: string): string {
   if (explicitPath?.trim()) {
     return explicitPath;
@@ -107,15 +115,17 @@ function parseAksharePayload(payload: unknown): SectorSnapshotItem[] {
 }
 
 async function defaultRunnerFactory(scriptPath: string): Promise<AkshareRunner> {
+  const pythonBin = resolvePythonBin();
   return async (timeoutMs: number, context?: StockDataLogContext) => {
     logStockDataEvent("akshare.runner.start", {
       requestId: context?.requestId,
+      pythonBin,
       scriptPath,
       timeoutMs
     }, "debug");
 
     try {
-      const { stdout, stderr } = await execFileAsync("python3", [scriptPath], {
+      const { stdout, stderr } = await execFileAsync(pythonBin, [scriptPath], {
         timeout: timeoutMs,
         maxBuffer: 8 * 1024 * 1024,
         env: process.env
@@ -135,7 +145,13 @@ async function defaultRunnerFactory(scriptPath: string): Promise<AkshareRunner> 
       return JSON.parse(stdout);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`akshare python execution failed: ${message}`);
+      if (message.includes("No module named 'akshare'") || message.includes('No module named "akshare"')) {
+        throw new Error(
+          `akshare python execution failed: missing python dependency 'akshare' in ${pythonBin}. ` +
+          `Install with: ${pythonBin} -m pip install -U akshare. Raw error: ${message}`
+        );
+      }
+      throw new Error(`akshare python execution failed (python=${pythonBin}): ${message}`);
     }
   };
 }

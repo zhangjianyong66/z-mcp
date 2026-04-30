@@ -71,6 +71,7 @@ XUEQIU_USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 - 如果需要改路径，可以设置 `STOCK_DATA_MCP_LOG_FILE=/your/path/stock-data-mcp.log`
 - `sector_list` 依赖本机 `python3` 和 `akshare` 包
 - 如需自定义脚本位置，可设置 `AKSHARE_SECTOR_SCRIPT_PATH`
+- 如需显式指定 Python 解释器，可设置 `AKSHARE_PYTHON_BIN`（例如 `.venv/bin/python`）
 
 ## 安装
 
@@ -78,6 +79,15 @@ XUEQIU_USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 npm install
 npx playwright install chromium
 python3 -m pip install akshare
+```
+
+推荐（更稳定）使用虚拟环境安装 akshare，避免 Node 子进程与 pip 环境不一致：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip akshare
+export AKSHARE_PYTHON_BIN=.venv/bin/python
 ```
 
 ## 开发
@@ -288,3 +298,62 @@ npm run build
 - `data`
 
 第一版不提供自动降级、多市场个股能力、持久缓存或报告生成。
+
+## 持仓与交易单工具
+
+- `save_portfolio_info`
+  - 保存/更新持仓信息（全量覆盖）
+  - 字段：`totalCapital`、`availableCapital`、`positions`、`updatedAt?`
+  - `positions` 字段：`symbol`、`name`、`quantity`、`costPrice`、`currentPrice`、`marketValue`
+  - `marketValue` 以传入值为准，同时会校验 `quantity*currentPrice`，不一致时返回 `warnings`
+- `save_trade_orders`
+  - 保存/更新交易单信息（全量覆盖）
+  - 每笔字段：`orderId?`、`symbol`、`name`、`side`、`quantity`、`orderTime`、`status`
+  - 自动失效：按 `Asia/Shanghai` 自然日，`pending` 挂单当天未成交次日自动转 `expired`
+- `get_portfolio_and_orders`
+  - 获取持仓与交易单
+  - 返回前会执行自动失效
+  - 若从未保存过数据，返回友好提示：`当前无持仓信息，请先保存持仓或交易单信息`
+
+新增环境变量：
+
+- `STOCK_DATA_MCP_USER_DATA_FILE`：持仓/交易单存储文件路径（默认 `~/.stock-data-mcp/user-data.json`）
+
+输入示例：
+
+`save_portfolio_info`:
+
+```json
+{
+  "totalCapital": 100000,
+  "availableCapital": 60000,
+  "positions": [
+    {
+      "symbol": "510300",
+      "name": "沪深300ETF",
+      "quantity": 1000,
+      "costPrice": 4.0,
+      "currentPrice": 4.2,
+      "marketValue": 4200
+    }
+  ]
+}
+```
+
+`save_trade_orders`:
+
+```json
+{
+  "orders": [
+    {
+      "orderId": "ord-001",
+      "symbol": "510300",
+      "name": "沪深300ETF",
+      "side": "buy",
+      "quantity": 100,
+      "orderTime": "2026-04-30T10:15:00+08:00",
+      "status": "pending"
+    }
+  ]
+}
+```
