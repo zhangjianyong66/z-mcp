@@ -17,16 +17,18 @@ export type LyricsInput = {
 export type MusicInput = {
   prompt?: string;
   lyrics?: string;
+  song_title?: string;
   model?: string;
   audio_setting?: Record<string, unknown>;
   output_format?: string;
+  lyrics_optimizer?: boolean;
+  is_instrumental?: boolean;
   voice_id?: string;
   instrumentation?: string;
   style?: string;
   genre?: string;
   custom?: Record<string, unknown>;
   save_to_file?: boolean;
-  wait_for_result?: boolean;
 };
 
 export type CoverInput = {
@@ -37,16 +39,13 @@ export type CoverInput = {
   model?: string;
   save_to_file?: boolean;
   custom?: Record<string, unknown>;
-  wait_for_result?: boolean;
 };
 
 export type SongFromPromptInput = {
   prompt: string;
-  lyrics_model?: string;
-  music_model?: string;
-  language?: string;
-  music_options?: Omit<MusicInput, "model" | "lyrics" | "save_to_file">;
-  save_to_file?: boolean;
+  output_format?: string;
+  audio_setting?: Record<string, unknown>;
+  with_lyrics?: boolean;
 };
 
 export type LyricsResult = {
@@ -71,9 +70,7 @@ export type MusicResult = {
 export type SongResult = {
   provider: "minimax";
   status: string;
-  lyrics: LyricsResult;
   music: MusicResult;
-  lyrics_file_path?: string;
 };
 
 export class MinimaxApiError extends Error {

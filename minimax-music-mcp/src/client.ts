@@ -78,40 +78,6 @@ export async function createCoverFeature(config: MinimaxConfig, payload: Record<
   return requestWithRetry(config, "POST", "/v1/music_cover_preprocess", payload);
 }
 
-export async function getMusicTask(config: MinimaxConfig, taskId: string): Promise<unknown> {
-  return requestWithRetry(config, "GET", `/v1/music_generation?task_id=${encodeURIComponent(taskId)}`);
-}
-
-function readTaskStatus(payload: unknown): string {
-  const p = payload as Record<string, unknown>;
-  const data = (p.data ?? p.output ?? p.result) as Record<string, unknown> | undefined;
-  const status = data?.status ?? p.status;
-  return typeof status === "string" ? status.toLowerCase() : "unknown";
-}
-
-export async function pollMusicResult(config: MinimaxConfig, taskId: string): Promise<unknown> {
-  const deadline = Date.now() + config.pollTimeoutMs;
-  let lastPayload: unknown;
-
-  while (Date.now() <= deadline) {
-    const payload = await getMusicTask(config, taskId);
-    lastPayload = payload;
-    const status = readTaskStatus(payload);
-
-    if (["success", "succeeded", "done", "completed", "finished"].includes(status)) {
-      return payload;
-    }
-
-    if (["failed", "error", "canceled", "cancelled"].includes(status)) {
-      throw new Error(`MiniMax task failed with status: ${status}`);
-    }
-
-    await delay(config.pollIntervalMs);
-  }
-
-  throw new Error(`MiniMax task polling timeout for task_id=${taskId}; last payload: ${JSON.stringify(lastPayload)}`);
-}
-
 export function readTaskId(payload: unknown): string | undefined {
   const p = payload as Record<string, unknown>;
   const data = (p.data ?? p.output ?? p.result) as Record<string, unknown> | undefined;

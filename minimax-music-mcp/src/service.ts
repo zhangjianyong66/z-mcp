@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { createCoverFeature, createLyrics, createMusicTask, pollMusicResult, readTaskId } from "./client.js";
+import { createCoverFeature, createLyrics, createMusicTask, readTaskId } from "./client.js";
 import { resolveConfig } from "./config.js";
 import type { CoverInput, LyricsInput, LyricsResult, MusicInput, MusicResult, SongFromPromptInput, SongResult } from "./types.js";
 
@@ -54,13 +54,19 @@ async function reserveOutputPath(base: string, ext: string): Promise<string> {
   return candidate;
 }
 
-async function saveHexAudios(hexAudios: string[], taskId: string | undefined, format: string | undefined): Promise<string[]> {
+async function saveHexAudios(
+  hexAudios: string[],
+  taskId: string | undefined,
+  format: string | undefined,
+  songTitle?: string
+): Promise<string[]> {
   const stamp = new Date().toISOString().replace(/[.:]/g, "-");
   const ext = inferExt(format);
+  const titlePart = sanitizeTitle(songTitle ?? "") || "untitled";
 
   const filepaths: string[] = [];
   for (let i = 0; i < hexAudios.length; i += 1) {
-    const base = `${stamp}_${taskId ?? "no-task"}_${i + 1}`;
+    const base = `${stamp}_${taskId ?? "no-task"}_${titlePart}_${i + 1}`;
     const candidate = await reserveOutputPath(base, ext);
     await fs.writeFile(candidate, Buffer.from(hexAudios[i], "hex"));
     filepaths.push(candidate);
@@ -143,6 +149,8 @@ export async function generateMusic(input: MusicInput): Promise<MusicResult> {
     lyrics: input.lyrics,
     audio_setting: input.audio_setting,
     output_format: input.output_format,
+    lyrics_optimizer: input.lyrics_optimizer,
+    is_instrumental: input.is_instrumental,
     voice_id: input.voice_id,
     instrumentation: input.instrumentation,
     style: input.style,
@@ -152,29 +160,20 @@ export async function generateMusic(input: MusicInput): Promise<MusicResult> {
 
   const createResp = await createMusicTask(config, payload);
   const taskId = readTaskId(createResp);
-  const shouldWait = input.wait_for_result ?? false;
-  if (taskId && !shouldWait) {
-    return {
-      provider: "minimax",
-      model: payload.model as string | undefined,
-      status: "submitted",
-      task_id: taskId,
-      raw_response: createResp
-    };
-  }
-
-  const finalResp = taskId ? await pollMusicResult(config, taskId) : createResp;
+  const finalResp = createResp;
   const audio = extractAudio(finalResp);
+  const hasAudio = audio.hexAudios.length > 0 || audio.audioUrls.length > 0;
+  const status = hasAudio ? audio.status : "submitted";
 
   let filepaths: string[] | undefined;
   if ((input.save_to_file ?? true) && audio.hexAudios.length > 0) {
-    filepaths = await saveHexAudios(audio.hexAudios, taskId, audio.format ?? input.output_format);
+    filepaths = await saveHexAudios(audio.hexAudios, taskId, audio.format ?? input.output_format, input.song_title);
   }
 
   return {
     provider: "minimax",
     model: payload.model as string | undefined,
-    status: audio.status,
+    status,
     task_id: taskId,
     audio_file_path: filepaths,
     audio_url: audio.audioUrls.length > 0 ? audio.audioUrls : undefined,
@@ -216,7 +215,6 @@ export async function createMusicCover(input: CoverInput): Promise<MusicResult> 
     voice_id: input.voice_id,
     lyrics: formattedLyrics,
     save_to_file: input.save_to_file,
-    wait_for_result: input.wait_for_result,
     custom: {
       cover_feature_id: coverFeatureId,
       ...(input.custom ?? {})
@@ -225,31 +223,19 @@ export async function createMusicCover(input: CoverInput): Promise<MusicResult> 
 }
 
 export async function generateSongFromPrompt(input: SongFromPromptInput): Promise<SongResult> {
-  const lyrics = await generateLyrics({
-    prompt: input.prompt,
-    model: input.lyrics_model,
-    language: input.language
-  });
-
+  const withLyrics = input.with_lyrics ?? true;
   const music = await generateMusic({
-    model: input.music_model,
-    lyrics: lyrics.lyrics,
-    save_to_file: input.save_to_file,
-    ...(input.music_options ?? {})
+    prompt: input.prompt,
+    save_to_file: true,
+    output_format: input.output_format,
+    audio_setting: input.audio_setting,
+    lyrics_optimizer: withLyrics,
+    is_instrumental: !withLyrics
   });
-
-  let lyricsFilePath: string | undefined;
-  if (input.save_to_file ?? true) {
-    const rawLyrics = asRecord(lyrics.raw_response);
-    const title = pickFirstString(rawLyrics.song_title) ?? "untitled";
-    lyricsFilePath = await saveLyricsText(title, lyrics.lyrics, music.task_id);
-  }
 
   return {
     provider: "minimax",
     status: music.status,
-    lyrics,
-    music,
-    lyrics_file_path: lyricsFilePath
+    music
   };
 }

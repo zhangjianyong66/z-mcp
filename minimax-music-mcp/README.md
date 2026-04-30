@@ -9,10 +9,12 @@ MiniMax 音乐生成 MCP 模块，封装以下 API：
 ## Tools
 
 - `generate_lyrics`: 提示词生成歌词
-- `generate_music`: 基于 prompt 或歌词生成音乐（自动轮询任务结果）
+- `generate_music`: 基于 prompt 或歌词生成音乐（仅使用 POST 返回结果）
 - `create_music_cover`: 翻唱工作流（preprocess + music generation）
-- `generate_song_from_prompt`: 一键提示词到歌曲（先歌词后音乐）
-  - 默认会将歌曲名和歌词写入同目录文本文件（`.txt`）
+- `generate_song_from_prompt`: 一键提示词到歌曲（仅调用 music generation）
+  - 模型默认读取环境变量：`MINIMAX_MUSIC_MODEL`
+  - 使用 `with_lyrics` 单参数控制是否生成带歌词歌曲（内部映射为 `lyrics_optimizer` + `is_instrumental`）
+  - 可选参数：`output_format`、`audio_setting`、`with_lyrics`
 
 ## Env
 
@@ -31,14 +33,10 @@ MINIMAX_POLL_TIMEOUT_MS=180000
 
 当返回 `audio_hex`/`audio` 时，默认自动写入本地目录：
 
-- 文件名规则：`{timestamp}_{taskId}_{index}.{ext}`
+- 文件名规则：`{timestamp}_{taskId}_{songTitle}_{index}.{ext}`
 - 冲突自动追加序号
 
-`generate_song_from_prompt` 还会写入歌词文本文件，内容格式：
-
-- 第一行：`Title: <song_title>`
-- 空行
-- 歌词正文
+`generate_song_from_prompt` 仅写入音频文件，不再写入歌词文本文件。
 
 ## Dev
 
