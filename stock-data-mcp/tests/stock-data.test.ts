@@ -312,7 +312,7 @@ function createSectorItem(overrides: Partial<SectorSnapshotItem> = {}): SectorSn
   };
 }
 
-test("runSectorList sorts by gainers and paginates", async () => {
+test("runSectorList sorts by gainers and returns all data", async () => {
   const provider: SectorProviderApi = {
     listIndustrySummary: async () => [
       createSectorItem({ sectorName: "医药", changePercent: -1.2 }),
@@ -322,7 +322,7 @@ test("runSectorList sorts by gainers and paginates", async () => {
   };
 
   const response = await runSectorList(
-    { sortBy: "gainers", page: 1, pageSize: 2 },
+    { sortBy: "gainers" },
     {
       provider,
       newsFetcher: async () => ["白酒板块领涨", "军工板块活跃"]
@@ -332,9 +332,8 @@ test("runSectorList sorts by gainers and paginates", async () => {
 
   assert.equal(response.source, "akshare_ths");
   assert.equal(response.generatedAt, "2026-04-23T12:00:00.000Z");
-  assert.equal(response.count, 2);
   assert.equal(response.total, 3);
-  assert.equal(response.hasMore, true);
+  assert.equal(response.data.length, 3);
   assert.equal(response.data[0]?.sectorName, "白酒");
   assert.equal(response.data[1]?.sectorName, "军工");
 });
@@ -349,7 +348,7 @@ test("runSectorList supports losers sorting", async () => {
   };
 
   const response = await runSectorList(
-    { sortBy: "losers", page: 1, pageSize: 10 },
+    { sortBy: "losers" },
     {
       provider,
       newsFetcher: async () => []
@@ -421,7 +420,7 @@ test("runSectorList retries transient sector provider errors and succeeds", asyn
   };
 
   const response = await runSectorList(
-    { sortBy: "gainers", page: 1, pageSize: 20 },
+    { sortBy: "gainers" },
     {
       provider,
       newsFetcher: async () => []
@@ -429,7 +428,7 @@ test("runSectorList retries transient sector provider errors and succeeds", asyn
   );
 
   assert.equal(attempts, 2);
-  assert.equal(response.count, 2);
+  assert.equal(response.data.length, 2);
   assert.deepEqual(response.data.map((item) => item.sectorName), ["半导体", "军工"]);
 });
 

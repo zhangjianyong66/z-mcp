@@ -26,9 +26,6 @@ test("akshare provider maps payload fields", async () => {
   });
 
   const result = await provider.listIndustrySummary({
-    page: 1,
-    pageSize: 20,
-    limit: 20,
     sortBy: "hot",
     timeoutMs: 15_000
   });
@@ -46,9 +43,6 @@ test("akshare provider throws when payload is empty", async () => {
 
   await assert.rejects(
     provider.listIndustrySummary({
-      page: 1,
-      pageSize: 20,
-      limit: 20,
       sortBy: "hot",
       timeoutMs: 15_000
     }),
@@ -65,9 +59,6 @@ test("akshare provider propagates runner error", async () => {
 
   await assert.rejects(
     provider.listIndustrySummary({
-      page: 1,
-      pageSize: 20,
-      limit: 20,
       sortBy: "hot",
       timeoutMs: 15_000
     }),
@@ -89,9 +80,6 @@ test("akshare provider uses AKSHARE_PYTHON_BIN when set", async () => {
   try {
     const provider = createAkshareProvider({ scriptPath: script });
     const result = await provider.listIndustrySummary({
-      page: 1,
-      pageSize: 20,
-      limit: 20,
       sortBy: "hot",
       timeoutMs: 15_000
     });

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://z-mcp.local/stock-data-mcp/sector_list.response.schema.json",
+  "title": "sector_list response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source",
+    "generatedAt",
+    "sortBy",
+    "total",
+    "newsScoreDegraded",
+    "data"
+  ],
+  "properties": {
+    "source": {
+      "const": "akshare_ths"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sortBy": {
+      "type": "string",
+      "enum": ["gainers", "losers", "hot"]
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "newsScoreDegraded": {
+      "type": "boolean"
+    },
+    "data": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SectorListItem"
+      }
+    }
+  },
+  "$defs": {
+    "NullableNumber": {
+      "type": ["number", "null"]
+    },
+    "NullableString": {
+      "type": ["string", "null"]
+    },
+    "SectorListItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sectorName",
+        "changePercent",
+        "upCount",
+        "downCount",
+        "amount",
+        "netInflow",
+        "leaderStock",
+        "leaderLatestPrice",
+        "leaderChangePercent",
+        "marketScore",
+        "newsScore",
+        "hotScore"
+      ],
+      "properties": {
+        "sectorName": {
+          "type": "string"
+        },
+        "changePercent": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "upCount": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "downCount": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "amount": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "netInflow": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "leaderStock": {
+          "$ref": "#/$defs/NullableString"
+        },
+        "leaderLatestPrice": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "leaderChangePercent": {
+          "$ref": "#/$defs/NullableNumber"
+        },
+        "marketScore": {
+          "type": "number"
+        },
+        "newsScore": {
+          "type": "number"
+        },
+        "hotScore": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

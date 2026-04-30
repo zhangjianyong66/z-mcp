@@ -515,8 +515,6 @@ export async function runSectorList(
   logStockDataEvent("sector_list.start", {
     requestId: context?.requestId,
     input: {
-      page: normalized.page,
-      pageSize: normalized.pageSize,
       sortBy: normalized.sortBy,
       timeoutMs: normalized.timeoutMs
     }
@@ -560,33 +558,21 @@ export async function runSectorList(
 
   const sorted = sortSectorItems(computed, normalized.sortBy);
   const total = sorted.length;
-  const start = (normalized.page - 1) * normalized.pageSize;
-  const end = start + normalized.pageSize;
-  const pageData = sorted.slice(start, end);
-  const hasMore = end < total;
 
   const response: SectorListResponse = {
     source: "akshare_ths",
     generatedAt: buildGeneratedAt(now),
     sortBy: normalized.sortBy,
-    page: normalized.page,
-    pageSize: normalized.pageSize,
-    limit: normalized.limit,
     total,
-    count: pageData.length,
-    hasMore,
     newsScoreDegraded,
-    data: pageData
+    data: sorted
   };
 
   logStockDataEvent("sector_list.success", {
     requestId: context?.requestId,
     sortBy: response.sortBy,
-    page: response.page,
-    pageSize: response.pageSize,
     total: response.total,
-    count: response.count,
-    hasMore: response.hasMore,
+    count: response.data.length,
     newsScoreDegraded: response.newsScoreDegraded
   });
 

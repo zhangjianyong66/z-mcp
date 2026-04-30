@@ -175,14 +175,14 @@ test("etf_batch_analyze fetches real analyze data for multiple symbols", { timeo
 
 test("sector_list fetches real sector data from akshare", { timeout: INTEGRATION_TIMEOUT_MS }, async () => {
   process.env.AKSHARE_SECTOR_SCRIPT_PATH = "scripts/akshare_sector_summary.py";
-  const response = await runSectorList({ pageSize: 5, timeout: 60 });
+  const response = await runSectorList({ timeout: 60 });
 
   console.log("sector_list response:", JSON.stringify(response, null, 2));
 
   assert.equal(response.source, "akshare_ths");
   assert.ok(response.total > 0, "expected total to be > 0");
-  assert.ok(response.count > 0, "expected count to be > 0");
   assert.ok(response.data.length > 0, "expected data array to not be empty");
+  assert.equal(response.total, response.data.length);
 
   const first = response.data[0];
   assert.ok(typeof first?.sectorName === "string", "expected sectorName to be a string");

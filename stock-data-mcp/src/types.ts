@@ -24,9 +24,6 @@ export type EtfBatchKlineInput = EtfBatchInput & {
 export type SectorListSortBy = "gainers" | "losers" | "hot";
 
 export type SectorListInput = {
-  limit?: number;
-  page?: number;
-  pageSize?: number;
   sortBy?: SectorListSortBy;
   timeout?: number;
 };
@@ -53,9 +50,6 @@ export type NormalizedEtfBatchKlineInput = {
 };
 
 export type NormalizedSectorListInput = {
-  page: number;
-  limit: number;
-  pageSize: number;
   sortBy: SectorListSortBy;
   timeoutMs: number;
 };
@@ -227,12 +221,7 @@ export type SectorListResponse = {
   source: SectorListSource;
   generatedAt: string;
   sortBy: SectorListSortBy;
-  page: number;
-  pageSize: number;
-  limit: number;
   total: number;
-  count: number;
-  hasMore: boolean;
   newsScoreDegraded: boolean;
   data: SectorListItem[];
 };

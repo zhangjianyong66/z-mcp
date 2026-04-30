@@ -48,8 +48,12 @@
   - 获取同花顺行业板块汇总
   - 支持 `sortBy=gainers|losers|hot`
   - `hot` 使用新闻热度与行情热度混合评分
-  - 支持分页，`limit` 兼容为 `pageSize` 别名
+  - 默认返回全量数据（无分页参数）
+  - 输出为 JSON 对象数组（`data`）
+  - MCP 文本输出默认使用压缩 JSON（无缩进换行）
   - 数据源：`AkShare stock_board_industry_summary_ths`
+
+所有工具默认返回压缩 JSON 文本；如需可读格式，请在调用方自行 prettify。
 
 ## 环境变量
 
@@ -195,8 +199,6 @@ npm run build
 
 ```json
 {
-  "page": 1,
-  "pageSize": 20,
   "sortBy": "hot",
   "timeout": 20
 }
@@ -289,13 +291,13 @@ npm run build
 
 - `source`
 - `sortBy`
-- `page`
-- `pageSize`
 - `total`
-- `count`
-- `hasMore`
 - `newsScoreDegraded`
 - `data`
+
+`sector_list` 出参 JSON Schema：
+
+- `docs/json-schemas/sector_list.response.schema.json`
 
 第一版不提供自动降级、多市场个股能力、持久缓存或报告生成。
 

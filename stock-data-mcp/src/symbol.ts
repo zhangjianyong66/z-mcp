@@ -15,13 +15,10 @@ import type {
 import {
   clamp,
   DEFAULT_KLINE_DAYS,
-  DEFAULT_LIST_LIMIT,
   DEFAULT_TIMEOUT_SECONDS,
   MAX_KLINE_DAYS,
-  MAX_LIST_LIMIT,
   MAX_TIMEOUT_SECONDS,
   MIN_KLINE_DAYS,
-  MIN_LIST_LIMIT,
   MIN_TIMEOUT_SECONDS
 } from "./config.js";
 
@@ -112,11 +109,7 @@ export function normalizeEtfBatchKlineInput(
 }
 
 export function normalizeSectorListInput(input: SectorListInput = {}): NormalizedSectorListInput {
-  const pageSize = input.pageSize ?? input.limit ?? DEFAULT_LIST_LIMIT;
   return {
-    page: clamp(input.page ?? 1, 1, Number.MAX_SAFE_INTEGER),
-    limit: clamp(pageSize, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
-    pageSize: clamp(pageSize, MIN_LIST_LIMIT, MAX_LIST_LIMIT),
     sortBy: input.sortBy ?? "hot",
     timeoutMs: normalizeTimeoutSeconds(input.timeout ?? 20) * 1000
   };
