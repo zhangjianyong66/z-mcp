@@ -33,12 +33,28 @@ type ServerPreset = {
   devArgs?: string[];
   distArgs?: string[];
   envPassthrough?: string[];
+  envDefaults?: Record<string, string>;
 };
 
 const SERVER_PRESETS: Record<ServerPresetName, ServerPreset> = {
   image: { dir: "image-mcp" },
   search: { dir: "search-mcp" },
-  "stock-data": { dir: "stock-data-mcp" },
+  "stock-data": {
+    dir: "stock-data-mcp",
+    envPassthrough: [
+      "AKSHARE_SECTOR_SCRIPT_PATH",
+      "PYTHONUNBUFFERED",
+      "HTTP_PROXY",
+      "HTTPS_PROXY",
+      "ALL_PROXY"
+    ],
+    envDefaults: {
+      PYTHONUNBUFFERED: "1",
+      HTTP_PROXY: "",
+      HTTPS_PROXY: "",
+      ALL_PROXY: ""
+    }
+  },
   "huawei-phone-push": {
     dir: "huawei-phone-push-mcp",
     envPassthrough: ["HUAWEI_PUSH_AUTH_CODE", "HUAWEI_PUSH_URL"]
@@ -125,15 +141,23 @@ export function resolveServerTarget(input: {
       : (preset?.distArgs ?? ["dist/index.js"]));
 
   let env: Record<string, string> | undefined;
-  if (preset?.envPassthrough && preset.envPassthrough.length > 0) {
+  if (preset) {
+    const defaults: Record<string, string> = { ...(preset.envDefaults ?? {}) };
+    if (presetName === "stock-data" && !process.env.AKSHARE_SECTOR_SCRIPT_PATH) {
+      defaults.AKSHARE_SECTOR_SCRIPT_PATH = resolve(targetDir, "scripts", "akshare_sector_summary.py");
+    }
+
+    const passthrough = preset.envPassthrough ?? [];
     const injected = Object.fromEntries(
-      preset.envPassthrough
+      passthrough
         .map((name) => [name, process.env[name]])
-        .filter(([, value]) => typeof value === "string" && value.length > 0)
+        .filter(([, value]) => typeof value === "string")
         .map(([name, value]) => [name, value as string])
     );
-    if (Object.keys(injected).length > 0) {
-      env = injected;
+
+    const merged = { ...defaults, ...injected };
+    if (Object.keys(merged).length > 0) {
+      env = merged;
     }
   }
 

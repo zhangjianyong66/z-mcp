@@ -3,7 +3,16 @@ import path from "node:path";
 
 import { createCoverFeature, createLyrics, createMusicTask, readTaskId } from "./client.js";
 import { resolveConfig } from "./config.js";
-import type { CoverInput, LyricsInput, LyricsResult, MusicInput, MusicResult, SongFromPromptInput, SongResult } from "./types.js";
+import type {
+  CoverInput,
+  InstrumentalFromPromptInput,
+  LyricsInput,
+  LyricsResult,
+  MusicInput,
+  MusicResult,
+  SongFromPromptInput,
+  SongResult
+} from "./types.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -223,19 +232,42 @@ export async function createMusicCover(input: CoverInput): Promise<MusicResult> 
 }
 
 export async function generateSongFromPrompt(input: SongFromPromptInput): Promise<SongResult> {
-  const withLyrics = input.with_lyrics ?? true;
+  const lyrics = await generateLyrics({
+    prompt: input.prompt
+  });
+
+  const rawLyrics = asRecord(lyrics.raw_response);
+  const title = pickFirstString(rawLyrics.song_title) ?? "untitled";
+
   const music = await generateMusic({
     prompt: input.prompt,
+    lyrics: lyrics.lyrics,
+    song_title: title,
     save_to_file: true,
     output_format: input.output_format,
     audio_setting: input.audio_setting,
-    lyrics_optimizer: withLyrics,
-    is_instrumental: !withLyrics
+    lyrics_optimizer: false,
+    is_instrumental: false
   });
+
+  const lyricsFilePath = await saveLyricsText(title, lyrics.lyrics, music.task_id);
 
   return {
     provider: "minimax",
     status: music.status,
-    music
+    lyrics,
+    music,
+    lyrics_file_path: lyricsFilePath
   };
+}
+
+export async function generateInstrumentalFromPrompt(input: InstrumentalFromPromptInput): Promise<MusicResult> {
+  return generateMusic({
+    prompt: input.prompt,
+    song_title: input.song_title,
+    output_format: input.output_format,
+    audio_setting: input.audio_setting,
+    is_instrumental: true,
+    save_to_file: true
+  });
 }

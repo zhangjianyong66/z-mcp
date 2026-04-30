@@ -45,7 +45,13 @@ export type SongFromPromptInput = {
   prompt: string;
   output_format?: string;
   audio_setting?: Record<string, unknown>;
-  with_lyrics?: boolean;
+};
+
+export type InstrumentalFromPromptInput = {
+  prompt: string;
+  song_title: string;
+  output_format?: string;
+  audio_setting?: Record<string, unknown>;
 };
 
 export type LyricsResult = {
@@ -70,7 +76,9 @@ export type MusicResult = {
 export type SongResult = {
   provider: "minimax";
   status: string;
+  lyrics: LyricsResult;
   music: MusicResult;
+  lyrics_file_path?: string;
 };
 
 export class MinimaxApiError extends Error {

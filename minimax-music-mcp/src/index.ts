@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { createMusicCover, generateSongFromPrompt } from "./service.js";
+import { createMusicCover, generateInstrumentalFromPrompt, generateSongFromPrompt } from "./service.js";
 
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,11 +36,10 @@ server.tool(
 
 server.tool(
   "generate_song_from_prompt",
-  "Generate music directly from prompt via music_generation; vocal/instrumental behavior controlled by with_lyrics.",
+  "Generate song from prompt in two steps: generate lyrics first, then generate music from those lyrics.",
   {
     prompt: z.string().min(1),
     output_format: z.enum(["hex", "url"]).optional(),
-    with_lyrics: z.boolean().optional(),
     audio_setting: z
       .object({
         aigc_watermark: z.boolean().optional(),
@@ -52,6 +51,31 @@ server.tool(
   async (input) => {
     try {
       const result = await generateSongFromPrompt(input as never);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "generate_instrumental_music",
+  "Generate instrumental music from prompt directly via music_generation.",
+  {
+    prompt: z.string().min(1),
+    song_title: z.string().min(1),
+    output_format: z.enum(["hex", "url"]).optional(),
+    audio_setting: z
+      .object({
+        aigc_watermark: z.boolean().optional(),
+        lyrics_optimizer: z.boolean().optional(),
+        is_instrumental: z.boolean().optional()
+      })
+      .optional()
+  },
+  async (input) => {
+    try {
+      const result = await generateInstrumentalFromPrompt(input as never);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (error) {
       return toToolError(error);

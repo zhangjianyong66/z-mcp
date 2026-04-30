@@ -72,6 +72,8 @@ function buildGeneratedAt(now: () => Date): string {
 }
 
 const DEFAULT_BATCH_CONCURRENCY = 5;
+const SECTOR_LIST_MAX_ATTEMPTS = 3;
+const SECTOR_LIST_RETRY_DELAY_MS = 300;
 
 function isAbortLikeError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -100,6 +102,58 @@ function classifyBatchError(error: unknown): { code: EtfBatchErrorCode; retryabl
   }
 
   return { code: "upstream_error", retryable: true };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isRetryableSectorListError(error: unknown): boolean {
+  if (isAbortLikeError(error)) {
+    return true;
+  }
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    message.includes("no tables found") ||
+    message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("akshare returned empty") ||
+    message.includes("empty sector list") ||
+    message.includes("connection reset")
+  );
+}
+
+async function fetchSectorBaseItemsWithRetry(
+  provider: SectorProviderApi,
+  normalized: ReturnType<typeof normalizeSectorListInput>,
+  context?: StockDataLogContext
+): Promise<SectorSnapshotItem[]> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= SECTOR_LIST_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await provider.listIndustrySummary(normalized, context);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableSectorListError(error) || attempt >= SECTOR_LIST_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      logStockDataEvent("sector_list.retry", {
+        requestId: context?.requestId,
+        attempt,
+        nextAttempt: attempt + 1,
+        maxAttempts: SECTOR_LIST_MAX_ATTEMPTS,
+        delayMs: SECTOR_LIST_RETRY_DELAY_MS,
+        error: error instanceof Error ? error.message : String(error)
+      }, "notice");
+      await sleep(SECTOR_LIST_RETRY_DELAY_MS);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function settleWithConcurrency<TInput, TOutput>(
@@ -468,7 +522,7 @@ export async function runSectorList(
     }
   });
 
-  const baseItems = await provider.listIndustrySummary(normalized, context);
+  const baseItems = await fetchSectorBaseItemsWithRetry(provider, normalized, context);
   if (!baseItems.length) {
     throw new Error("sector list is empty");
   }

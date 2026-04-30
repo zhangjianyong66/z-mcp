@@ -404,3 +404,54 @@ test("runSectorList degrades news score when news fetch fails", async () => {
   assert.equal(response.newsScoreDegraded, true);
   assert.deepEqual(response.data.map((item) => item.newsScore), [0, 0]);
 });
+
+test("runSectorList retries transient sector provider errors and succeeds", async () => {
+  let attempts = 0;
+  const provider: SectorProviderApi = {
+    listIndustrySummary: async () => {
+      attempts += 1;
+      if (attempts < 2) {
+        throw new Error("akshare python execution failed: No tables found");
+      }
+      return [
+        createSectorItem({ sectorName: "半导体", changePercent: 2.1 }),
+        createSectorItem({ sectorName: "军工", changePercent: 1.2 })
+      ];
+    }
+  };
+
+  const response = await runSectorList(
+    { sortBy: "gainers", page: 1, pageSize: 20 },
+    {
+      provider,
+      newsFetcher: async () => []
+    }
+  );
+
+  assert.equal(attempts, 2);
+  assert.equal(response.count, 2);
+  assert.deepEqual(response.data.map((item) => item.sectorName), ["半导体", "军工"]);
+});
+
+test("runSectorList fails after max retries on transient sector provider errors", async () => {
+  let attempts = 0;
+  const provider: SectorProviderApi = {
+    listIndustrySummary: async () => {
+      attempts += 1;
+      throw new Error("akshare python execution failed: No tables found");
+    }
+  };
+
+  await assert.rejects(
+    runSectorList(
+      { sortBy: "gainers" },
+      {
+        provider,
+        newsFetcher: async () => []
+      }
+    ),
+    /No tables found/
+  );
+
+  assert.equal(attempts, 3);
+});
