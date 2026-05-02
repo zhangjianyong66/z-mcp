@@ -15,6 +15,7 @@
 
 ```bash
 npm run dev -- inspect image
+npm run dev -- list-tools video
 npm run dev -- list-tools search
 npm run dev -- call-tool stock-data etf_quote --input '{"symbol":"159930"}'
 HUAWEI_PUSH_AUTH_CODE=your-auth-code npm run dev -- list-tools huawei-phone-push --mode dist
@@ -23,6 +24,7 @@ HUAWEI_PUSH_AUTH_CODE=your-auth-code npm run dev -- list-tools huawei-phone-push
 ## 默认 server
 
 - `image` -> `../image-mcp`
+- `video` -> `../video-mcp`
 - `search` -> `../search-mcp`
 - `stock-data` -> `../stock-data-mcp`
 - `huawei-phone-push` -> `../huawei-phone-push-mcp`

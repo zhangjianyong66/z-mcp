@@ -1,155 +1,220 @@
 # z-mcp
 
-个人使用的 MCP server 集合仓库。
+个人使用的 MCP（Model Context Protocol）服务集合仓库，按模块拆分维护，便于按需启用。
 
-当前模块：
+## 项目概览
 
-- `image-mcp`
-  - 图片相关能力
-  - 当前提供纯文本生图、参考图生图和图片理解工具
-  - 底层通过阿里云百炼 `qwen-image` 同步接口生成图片
-- `search-mcp`
-  - 联网搜索能力
-  - 通过参数选择 `aliyun`、`baidu`、`ddg` 搜索 provider
-  - 返回统一结构化搜索结果
-- `stock-data-mcp`
-  - ETF 数据能力
-  - 当前提供 ETF 最新行情、历史 K 线、技术分析和 ETF 列表工具
-  - provider 包括 `eastmoney` 与 `xueqiu`，其中 `etf_list` 默认解析东财 `fund_etf` 网格页数据，并支持 `eastmoney` / `sse` 自动回退，返回中会带 `sourceUrl` 和 `sourceQuery`
-- `huawei-phone-push-mcp`
-  - 华为手机结果推送能力
-  - 提供任务结果推送与本地推送记录查询工具
-- `mcp-cli`
-  - MCP 协议调试与冒烟测试工具
-  - 方便列出 tools、调用 tool、查看 server capabilities
-- `playwright-tools`
-  - 独立的 Playwright 浏览器自动化工具包
-  - 方便打开页面、抓取快照、保存截图和复用浏览器配置
-- `feishu-mcp`
-  - 飞书群聊管理能力
-  - 提供建群、改名、解散、成员管理、群查询与成员查询工具
-- `todo-mcp`
-  - 待办任务管理能力
-  - 提供创建、更新、完成、软删除、单条查询与列表筛选工具
-- `xiaohongshu-mcp`
-  - 小红书 MCP 服务
-  - 作为 Git 子模块接入，路径为 `xiaohongshu-mcp/`
+本仓库提供多类 MCP 能力：
 
-模块说明见 [mcp-cli/README.md](./mcp-cli/README.md)。
+- 图像生成与理解
+- 联网搜索与财经热点
+- ETF/板块数据查询与分析
+- 飞书群聊管理
+- 待办计划管理（SQLite）
+- 华为手机消息推送
+- 浏览器自动化（Playwright / CDP）
+- 音乐生成（MiniMax）
+- 小红书只读检索（基于 CDP）
 
-## 目录结构
+## 仓库结构
 
 ```text
 z-mcp/
 ├── README.md
+├── cdp-browser-mcp/
+├── feishu-mcp/
+├── huawei-phone-push-mcp/
 ├── image-mcp/
+├── mcp-cli/
+├── minimax-music-mcp/
+├── playwright-tools/
 ├── search-mcp/
 ├── stock-data-mcp/
-├── huawei-phone-push-mcp/
-├── mcp-cli/
-├── playwright-tools/
-├── feishu-mcp/
 ├── todo-mcp/
+├── video-mcp/
 └── xiaohongshu-mcp/
 ```
 
-## 已有模块
+## 模块矩阵
 
-### image-mcp
+| 模块 | 主要能力 | 核心工具/命令 | 额外依赖 | 说明 |
+|---|---|---|---|---|
+| `image-mcp` | 生图、参考图编辑、图片理解 | `generate_image` `edit_image` `analyze_image` | DashScope API Key | [README](./image-mcp/README.md) |
+| `video-mcp` | 首尾帧图生视频 | `generate_video_from_frames` | DashScope API Key | [README](./video-mcp/README.md) |
+| `search-mcp` | 通用联网搜索、财经热点 | `web_search` `finance_hotnews` | 可选阿里/百度密钥 | [README](./search-mcp/README.md) |
+| `stock-data-mcp` | ETF 行情/K 线/分析/列表、行业板块 | `etf_*` `sector_list` | Playwright、Python+akshare（板块） | [README](./stock-data-mcp/README.md) |
+| `huawei-phone-push-mcp` | 华为手机推送与记录查询 | `push_to_huawei_phone` `get_push_history` | 推送鉴权码 | [README](./huawei-phone-push-mcp/README.md) |
+| `feishu-mcp` | 飞书群聊管理 | `create_chat` `rename_chat` `delete_chat` 等 | 飞书应用凭证 | [README](./feishu-mcp/README.md) |
+| `todo-mcp` | 计划/任务/子任务管理 | `create_plan` `create_task` `create_subtask` 等 | SQLite 文件路径 | [README](./todo-mcp/README.md) |
+| `cdp-browser-mcp` | 通用 Chrome CDP 控制 | `cdp_health` `new_tab` `navigate` `click` 等 | 本机 Chrome | [README](./cdp-browser-mcp/README.md) |
+| `xiaohongshu-mcp` | 小红书只读能力（登录/搜索/详情） | `check_login_status` `search_feeds` `get_feed_detail` | 依赖 `cdp-browser-mcp` | [README](./xiaohongshu-mcp/README.md) |
+| `minimax-music-mcp` | 歌词生成、音乐生成、翻唱 | `generate_lyrics` `generate_music` `create_music_cover` 等 | MiniMax API Key | [README](./minimax-music-mcp/README.md) |
+| `playwright-tools` | 本地网页自动化工具包 | `open` `snapshot`（CLI） | Playwright 浏览器 | [README](./playwright-tools/README.md) |
+| `mcp-cli` | MCP 调试与冒烟测试 | `inspect` `list-tools` `call-tool` | 无 | [README](./mcp-cli/README.md) |
 
-路径：`image-mcp/`
+## 快速开始
 
-功能：
+### 1) 通用前置
 
-- 支持通过提示词生成图片
-- 支持输入参考图生成新图片
-- 支持输入图片进行通用视觉问答和内容理解
-- 返回百炼生成的临时图片 URL
+- Node.js 20+（建议 22+）
+- npm 10+
+- macOS/Linux/WSL 均可
 
-模块说明见 [image-mcp/README.md](./image-mcp/README.md)。
+按模块可能还需要：
 
-### search-mcp
+- Playwright 浏览器（`npx playwright install chromium`）
+- Python 3 + `akshare`（`stock-data-mcp` 的 `sector_list`）
 
-路径：`search-mcp/`
+### 2) 安装模块依赖
 
-功能：
+按需进入模块目录安装：
 
-- 支持通过统一工具 `web_search` 进行联网搜索
-- 调用时可选择 `aliyun`、`baidu`、`ddg` provider
-- 不做多源聚合，返回统一结构化结果
+```bash
+cd image-mcp && npm install
+cd ../search-mcp && npm install
+cd ../stock-data-mcp && npm install
+```
 
-模块说明见 [search-mcp/README.md](./search-mcp/README.md)。
+如果模块有测试/类型检查脚本，可先执行：
 
-### stock-data-mcp
+```bash
+npm run check
+npm test
+```
 
-路径：`stock-data-mcp/`
+### 3) 本地开发运行
 
-功能：
+大多数模块支持：
 
-- 支持通过 `etf_quote` 获取 ETF 最新行情
-- 支持通过 `etf_kline` 获取 ETF 日 K 数据
-- 支持通过 `etf_analyze` 获取 ETF 技术分析
-- 支持通过 `etf_list` 获取 ETF 列表
+```bash
+npm run dev
+```
 
-模块说明见 [stock-data-mcp/README.md](./stock-data-mcp/README.md)。
+需要生产方式时：
 
-### huawei-phone-push-mcp
+```bash
+npm run build
+npm start
+```
 
-路径：`huawei-phone-push-mcp/`
+## 环境变量总览（按模块）
 
-功能：
+以下仅列关键项，完整配置以各模块 README 为准。
 
-- 支持通过 `push_to_huawei_phone` 推送任务执行结果
-- 支持通过 `get_push_history` 查询本地推送记录
-- 支持通过环境变量配置推送 URL、鉴权码和记录策略
+- `image-mcp`
+  - 必需：`DASHSCOPE_API_KEY`
+  - 常用：`DASHSCOPE_BASE_URL` `DASHSCOPE_MODEL` `VISION_MODEL`
+- `video-mcp`
+  - 必需：`DASHSCOPE_API_KEY`
+  - 常用：`DASHSCOPE_BASE_URL` `DASHSCOPE_VIDEO_MODEL`
+- `search-mcp`
+  - 可选（provider 对应启用）：`ALIYUN_WEBSEARCH_API_KEY` `BAIDU_API_KEY`
+- `stock-data-mcp`
+  - 常用：`XUEQIU_COOKIE`
+  - 可选：`STOCK_DATA_MCP_LOG_FILE` `AKSHARE_PYTHON_BIN`
+- `huawei-phone-push-mcp`
+  - 必需：`HUAWEI_PUSH_AUTH_CODE`
+- `feishu-mcp`
+  - 必需：`FEISHU_APP_ID` `FEISHU_APP_SECRET`
+- `todo-mcp`
+  - 必需：`TODO_MCP_DB_FILE`
+- `cdp-browser-mcp`
+  - 常用：`CDP_ENDPOINT`
+- `xiaohongshu-mcp`
+  - 必需：`XHS_CDP_MCP_ARGS`
+  - 常用：`XHS_CDP_ENDPOINT` `XHS_AUTO_START_CHROME`
+- `minimax-music-mcp`
+  - 必需：`MINIMAX_API_KEY`
+  - 常用：`MINIMAX_BASE_URL` `MINIMAX_MUSIC_MODEL` `MINIMAX_OUTPUT_DIR`
 
-模块说明见 [huawei-phone-push-mcp/README.md](./huawei-phone-push-mcp/README.md)。
+## MCP 客户端配置示例
 
-### playwright-tools
+### 示例 1：接入搜索 + 股票数据
 
-路径：`playwright-tools/`
+```json
+{
+  "mcpServers": {
+    "search": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/search-mcp/dist/index.js"],
+      "env": {
+        "ALIYUN_WEBSEARCH_API_KEY": "your_api_key"
+      }
+    },
+    "stock-data": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/stock-data-mcp/dist/index.js"],
+      "env": {
+        "XUEQIU_COOKIE": "xq_a_token=...; xq_r_token=..."
+      }
+    }
+  }
+}
+```
 
-功能：
+### 示例 2：接入 cdp-browser + 小红书
 
-- 提供可复用的 Playwright 浏览器封装
-- 支持打开页面、抓取文本和 HTML 快照
-- 支持保存截图和统一配置浏览器参数
+```json
+{
+  "mcpServers": {
+    "cdp-browser": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/cdp-browser-mcp/dist/index.js"],
+      "env": {
+        "CDP_ENDPOINT": "http://127.0.0.1:9222"
+      }
+    },
+    "xiaohongshu-lite": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/xiaohongshu-mcp/dist/index.js"],
+      "env": {
+        "XHS_CDP_MCP_COMMAND": "node",
+        "XHS_CDP_MCP_ARGS": "[\"/absolute/path/to/z-mcp/cdp-browser-mcp/dist/index.js\"]",
+        "XHS_CDP_ENDPOINT": "http://127.0.0.1:9222"
+      }
+    }
+  }
+}
+```
 
-模块说明见 [playwright-tools/README.md](./playwright-tools/README.md)。
+## 用 mcp-cli 做联调
 
-### feishu-mcp
+`mcp-cli` 用于快速验证本仓库内 MCP 服务：
 
-路径：`feishu-mcp/`
+```bash
+cd mcp-cli
+npm install
 
-功能：
+# 查看 server 能力
+npm run dev -- inspect image
 
-- 支持通过 `create_chat` 创建飞书群聊
-- 支持通过 `rename_chat`、`delete_chat` 管理群基础信息
-- 支持通过 `add_chat_members`、`remove_chat_members` 管理成员
-- 支持通过 `list_chats`、`get_chat`、`list_chat_members` 查询群与成员
+# 查看工具列表
+npm run dev -- list-tools search
 
-模块说明见 [feishu-mcp/README.md](./feishu-mcp/README.md)。
+# 调用工具
+npm run dev -- call-tool stock-data etf_quote --input '{"symbol":"159930"}'
+```
 
-### todo-mcp
+## 常见排障
 
-路径：`todo-mcp/`
+- 鉴权错误
+  - 先检查对应模块的必填环境变量是否已注入。
+- Playwright 相关报错
+  - 执行 `npx playwright install chromium`，并确认系统依赖完整。
+- `sector_list` 失败
+  - 检查 `python3` 与 `akshare` 是否安装在当前可执行环境；必要时设置 `AKSHARE_PYTHON_BIN`。
+- CDP 连接失败
+  - 确认 Chrome 以 remote debugging 启动，且 `CDP_ENDPOINT` 可访问。
+- Tool 名找不到
+  - 先用 `mcp-cli list-tools <server>` 获取当前真实暴露工具名。
 
-功能：
+## 模块状态与维护约定
 
-- 支持通过 `create_todo` 创建待办任务
-- 支持通过 `update_todo`、`complete_todo`、`delete_todo` 管理任务
-- 支持通过 `get_todo`、`list_todos` 查询任务（含筛选/排序/分页）
-
-模块说明见 [todo-mcp/README.md](./todo-mcp/README.md)。
-
-### xiaohongshu-mcp
-
-路径：`xiaohongshu-mcp/`
-
-功能：
-
-- 小红书 MCP 服务
-- 提供搜索、浏览、发布等小红书相关能力
-- 作为独立 Git 子模块维护
-
-模块说明见 [xiaohongshu-mcp/README.md](./xiaohongshu-mcp/README.md)。
+- 本仓库主要面向个人使用场景，模块迭代可能较快。
+- 不同模块的稳定性和兼容策略可能不同，生产接入前建议固定 commit 并做回归。
+- 新增模块建议至少提供以下文档字段：
+  - 功能说明
+  - 环境变量（必填/可选）
+  - 本地运行步骤
+  - MCP 配置示例
+  - 最小调用示例

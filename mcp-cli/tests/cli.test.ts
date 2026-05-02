@@ -78,6 +78,37 @@ test("resolveServerTarget supports huawei-phone-push preset", () => {
   assert.match(target.cwd, /huawei-phone-push-mcp$/);
 });
 
+test("resolveServerTarget passes through required env for video preset", () => {
+  const previousApiKey = process.env.DASHSCOPE_API_KEY;
+  const previousBaseURL = process.env.DASHSCOPE_BASE_URL;
+  const previousModel = process.env.DASHSCOPE_VIDEO_MODEL;
+  process.env.DASHSCOPE_API_KEY = "video-key";
+  process.env.DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com";
+  process.env.DASHSCOPE_VIDEO_MODEL = "wan2.7-i2v-2026-04-25";
+  try {
+    const target = resolveServerTarget({ serverName: "video" });
+    assert.equal(target.env?.DASHSCOPE_API_KEY, "video-key");
+    assert.equal(target.env?.DASHSCOPE_BASE_URL, "https://dashscope.aliyuncs.com");
+    assert.equal(target.env?.DASHSCOPE_VIDEO_MODEL, "wan2.7-i2v-2026-04-25");
+  } finally {
+    if (previousApiKey === undefined) {
+      delete process.env.DASHSCOPE_API_KEY;
+    } else {
+      process.env.DASHSCOPE_API_KEY = previousApiKey;
+    }
+    if (previousBaseURL === undefined) {
+      delete process.env.DASHSCOPE_BASE_URL;
+    } else {
+      process.env.DASHSCOPE_BASE_URL = previousBaseURL;
+    }
+    if (previousModel === undefined) {
+      delete process.env.DASHSCOPE_VIDEO_MODEL;
+    } else {
+      process.env.DASHSCOPE_VIDEO_MODEL = previousModel;
+    }
+  }
+});
+
 test("resolveServerTarget passes through required env for huawei-phone-push", () => {
   const previousAuth = process.env.HUAWEI_PUSH_AUTH_CODE;
   const previousPush = process.env.HUAWEI_PUSH_URL;
