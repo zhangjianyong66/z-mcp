@@ -1,4 +1,6 @@
 import { DEFAULT_DASHSCOPE_BASE_URL, DEFAULT_MODEL, type ImageProviderConfig } from "./types.js";
+import { readFileSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 
 type EnvSource = Record<string, string | undefined>;
 
@@ -24,6 +26,30 @@ type ChainParseOptions = {
   modelVars: string[];
   defaultModel?: string;
 };
+
+function resolveChainPayload(source: EnvSource, chainVar: string): string | undefined {
+  const rawValue = readEnv(source, chainVar);
+  if (!rawValue) {
+    return undefined;
+  }
+
+  if (!rawValue.startsWith("file:")) {
+    return rawValue;
+  }
+
+  const rawPath = rawValue.slice("file:".length).trim();
+  if (!rawPath) {
+    throw new Error(`${chainVar} file path is empty`);
+  }
+
+  const path = isAbsolute(rawPath) ? rawPath : resolve(process.cwd(), rawPath);
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${chainVar} file read failed: ${message}`);
+  }
+}
 
 function parseChainEntry(entry: unknown, index: number): ImageProviderConfig {
   if (!entry || typeof entry !== "object") {
@@ -86,7 +112,7 @@ function resolveLegacyConfigByOptions(source: EnvSource, options: ChainParseOpti
 }
 
 function resolveProviderChainByOptions(source: EnvSource, options: ChainParseOptions): ImageProviderConfig[] {
-  const serializedChain = readEnv(source, options.chainVar);
+  const serializedChain = resolveChainPayload(source, options.chainVar);
   if (!serializedChain) {
     return [resolveLegacyConfigByOptions(source, options)];
   }

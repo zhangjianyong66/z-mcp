@@ -1,7 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { resolveProviderChain, resolveVisionProviderChain } from "../src/config.js";
+
+function withTempDir(callback: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "image-mcp-config-test-"));
+  try {
+    callback(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 test("resolveProviderChain parses IMAGE_MODEL_CHAIN in priority order", () => {
   const chain = resolveProviderChain({
@@ -64,6 +76,33 @@ test("resolveProviderChain rejects invalid IMAGE_MODEL_CHAIN payloads", () => {
   );
 });
 
+test("resolveProviderChain parses IMAGE_MODEL_CHAIN from file path", () => {
+  withTempDir((dir) => {
+    const chainPath = join(dir, "image-chain.json");
+    writeFileSync(chainPath, JSON.stringify([
+      {
+        provider: "dashscope",
+        model: "model-from-file",
+        apiKey: "key-from-file",
+        baseURL: "https://file.example.com/"
+      }
+    ]), "utf8");
+
+    const chain = resolveProviderChain({
+      IMAGE_MODEL_CHAIN: `file:${chainPath}`
+    });
+
+    assert.deepEqual(chain, [
+      {
+        provider: "dashscope",
+        model: "model-from-file",
+        apiKey: "key-from-file",
+        baseURL: "https://file.example.com"
+      }
+    ]);
+  });
+});
+
 test("resolveVisionProviderChain parses VISION_MODEL_CHAIN in priority order", () => {
   const chain = resolveVisionProviderChain({
     VISION_MODEL_CHAIN: JSON.stringify([
@@ -122,4 +161,56 @@ test("resolveVisionProviderChain requires a vision model when no chain is config
       }),
     /Missing required environment variable: VISION_MODEL/
   );
+});
+
+test("resolveVisionProviderChain parses VISION_MODEL_CHAIN from file path", () => {
+  withTempDir((dir) => {
+    const chainPath = join(dir, "vision-chain.json");
+    writeFileSync(chainPath, JSON.stringify([
+      {
+        provider: "dashscope",
+        model: "vision-from-file",
+        apiKey: "vision-key-from-file"
+      }
+    ]), "utf8");
+
+    const chain = resolveVisionProviderChain({
+      VISION_MODEL_CHAIN: `file:${chainPath}`
+    });
+
+    assert.deepEqual(chain, [
+      {
+        provider: "dashscope",
+        model: "vision-from-file",
+        apiKey: "vision-key-from-file",
+        baseURL: "https://dashscope.aliyuncs.com"
+      }
+    ]);
+  });
+});
+
+test("resolveProviderChain rejects empty file path", () => {
+  assert.throws(
+    () => resolveProviderChain({ IMAGE_MODEL_CHAIN: "file:   " }),
+    /IMAGE_MODEL_CHAIN file path is empty/
+  );
+});
+
+test("resolveProviderChain rejects non-existent file path", () => {
+  assert.throws(
+    () => resolveProviderChain({ IMAGE_MODEL_CHAIN: "file:/definitely/not/exist/image-chain.json" }),
+    /IMAGE_MODEL_CHAIN file read failed:/
+  );
+});
+
+test("resolveProviderChain rejects invalid json from file path", () => {
+  withTempDir((dir) => {
+    const chainPath = join(dir, "bad.json");
+    writeFileSync(chainPath, "{not valid json", "utf8");
+
+    assert.throws(
+      () => resolveProviderChain({ IMAGE_MODEL_CHAIN: `file:${chainPath}` }),
+      /IMAGE_MODEL_CHAIN must be valid JSON:/
+    );
+  });
 });

@@ -50,6 +50,14 @@ IMAGE_MODEL_CHAIN='[
 ]'
 ```
 
+如果你希望把回退链放到独立 JSON 文件，也可以使用 `file:` 前缀传路径：
+
+```bash
+IMAGE_MODEL_CHAIN=file:/absolute/path/to/image-chain.json
+# 或相对路径（相对于进程工作目录）
+IMAGE_MODEL_CHAIN=file:./configs/image-chain.json
+```
+
 图片理解工具使用独立视觉模型配置：
 
 ```bash
@@ -77,10 +85,20 @@ VISION_MODEL_CHAIN='[
 ]'
 ```
 
+视觉回退链同样支持 JSON 文件路径：
+
+```bash
+VISION_MODEL_CHAIN=file:/absolute/path/to/vision-chain.json
+# 或相对路径（相对于进程工作目录）
+VISION_MODEL_CHAIN=file:./configs/vision-chain.json
+```
+
 说明：
 
 - `IMAGE_MODEL_CHAIN` 存在时优先使用，按数组顺序尝试候选模型
 - `VISION_MODEL_CHAIN` 存在时优先用于 `analyze_image`
+- `IMAGE_MODEL_CHAIN` / `VISION_MODEL_CHAIN` 以 `file:` 开头时，会读取对应 JSON 文件内容
+- 未使用 `file:` 前缀时，`IMAGE_MODEL_CHAIN` / `VISION_MODEL_CHAIN` 按内联 JSON 字符串解析
 - `DASHSCOPE_API_KEY` 为首选鉴权变量
 - `VISION_API_KEY` 用于图片理解；未设置时会回退到 `DASHSCOPE_API_KEY` / `LLM_API_KEY`
 - `LLM_API_KEY` 和 `LLM_MODEL` 仍可作为兼容兜底
@@ -219,6 +237,43 @@ npm run build
       "args": ["/absolute/path/to/z-mcp/image-mcp/dist/index.js"],
       "env": {
         "IMAGE_MODEL_CHAIN": "[{\"provider\":\"dashscope\",\"apiKey\":\"your_primary_key\",\"baseURL\":\"https://dashscope.aliyuncs.com\",\"model\":\"qwen-image-2.0-pro\"},{\"provider\":\"dashscope\",\"apiKey\":\"your_secondary_key\",\"baseURL\":\"https://dashscope.aliyuncs.com\",\"model\":\"wanx2.1-t2i-turbo\"}]"
+      }
+    }
+  }
+}
+```
+
+你也可以把模型链写入独立文件，再通过 `file:` 传入：
+
+`image-chain.json` 示例：
+
+```json
+[
+  {
+    "provider": "dashscope",
+    "apiKey": "your_primary_key",
+    "baseURL": "https://dashscope.aliyuncs.com",
+    "model": "qwen-image-2.0-pro"
+  },
+  {
+    "provider": "dashscope",
+    "apiKey": "your_secondary_key",
+    "baseURL": "https://dashscope.aliyuncs.com",
+    "model": "wanx2.1-t2i-turbo"
+  }
+]
+```
+
+MCP 配置：
+
+```json
+{
+  "mcpServers": {
+    "image": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/image-mcp/dist/index.js"],
+      "env": {
+        "IMAGE_MODEL_CHAIN": "file:/absolute/path/to/image-chain.json"
       }
     }
   }
