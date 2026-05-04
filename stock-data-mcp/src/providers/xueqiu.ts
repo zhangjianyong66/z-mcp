@@ -1,4 +1,5 @@
 import { getXueqiuConfig, withTimeout } from "../config.js";
+import { logStockDataEvent } from "../logging.js";
 import type {
   EtfProviderApi,
   EtfQuote,
@@ -13,9 +14,18 @@ const XUEQIU_HOME_URL = "https://xueqiu.com/";
 const XUEQIU_COOKIE_TTL_MS = 30 * 60 * 1000;
 
 type CookieLoader = () => Promise<string>;
+type CookieSource = "env" | "auto-cache" | "auto-fresh";
+type FetchLike = typeof fetch;
+type XueqiuAuthErrorDetails = {
+  authStatus: number;
+  cookieSource: CookieSource;
+  refreshed: boolean;
+  retryAttempt: number;
+};
 
 let cachedCookie: string | null = null;
 let cookieFetchedAtMs = 0;
+let fetchImpl: FetchLike = fetch;
 
 function serializeCookies(cookies: Array<{ name: string; value: string }>): string {
   return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
@@ -101,14 +111,18 @@ export function setXueqiuCookieLoaderForTests(loader?: CookieLoader): void {
   clearXueqiuCookieCache();
 }
 
-export async function resolveXueqiuCookie(): Promise<string> {
+export function setXueqiuFetchForTests(nextFetch?: FetchLike): void {
+  fetchImpl = nextFetch ?? fetch;
+}
+
+async function resolveXueqiuCookieWithSource(forceRefresh = false): Promise<{ cookie: string; source: CookieSource }> {
   const cfg = getXueqiuConfig();
   if (cfg.cookie) {
-    return cfg.cookie;
+    return { cookie: cfg.cookie, source: "env" };
   }
 
-  if (cachedCookie && Date.now() - cookieFetchedAtMs < XUEQIU_COOKIE_TTL_MS) {
-    return cachedCookie;
+  if (!forceRefresh && cachedCookie && Date.now() - cookieFetchedAtMs < XUEQIU_COOKIE_TTL_MS) {
+    return { cookie: cachedCookie, source: "auto-cache" };
   }
 
   const cookie = await cookieLoader();
@@ -117,7 +131,12 @@ export async function resolveXueqiuCookie(): Promise<string> {
   }
   cachedCookie = cookie;
   cookieFetchedAtMs = Date.now();
-  return cookie;
+  return { cookie, source: "auto-fresh" };
+}
+
+export async function resolveXueqiuCookie(): Promise<string> {
+  const resolved = await resolveXueqiuCookieWithSource();
+  return resolved.cookie;
 }
 
 export async function warmXueqiuCookie(): Promise<void> {
@@ -129,24 +148,77 @@ export async function warmXueqiuCookie(): Promise<void> {
   }
 }
 
-async function createHeaders(): Promise<Record<string, string>> {
+async function createHeaders(forceRefresh = false): Promise<{ headers: Record<string, string>; cookieSource: CookieSource }> {
   const cfg = getXueqiuConfig();
+  const resolved = await resolveXueqiuCookieWithSource(forceRefresh);
   return {
-    "User-Agent": cfg.userAgent,
-    Referer: XUEQIU_HOME_URL,
-    Cookie: await resolveXueqiuCookie(),
-    Accept: "application/json,text/plain,*/*"
+    headers: {
+      "User-Agent": cfg.userAgent,
+      Referer: XUEQIU_HOME_URL,
+      Cookie: resolved.cookie,
+      Accept: "application/json,text/plain,*/*"
+    },
+    cookieSource: resolved.source
   };
+}
+
+function buildXueqiuAuthError(
+  message: string,
+  details: XueqiuAuthErrorDetails
+): Error {
+  const error = new Error(message) as Error & { details?: XueqiuAuthErrorDetails };
+  error.details = details;
+  return error;
+}
+
+function isAuthStatus(status: number): boolean {
+  return status === 401 || status === 403;
 }
 
 async function fetchJson(url: string, params: Record<string, string | number>, timeoutMs: number): Promise<unknown> {
   const search = new URLSearchParams(
     Object.entries(params).map(([key, value]) => [key, String(value)])
   );
-  const response = await fetch(`${url}?${search.toString()}`, {
-    headers: await createHeaders(),
+  const requestUrl = `${url}?${search.toString()}`;
+  const firstAttempt = await createHeaders(false);
+  let response = await fetchImpl(requestUrl, {
+    headers: firstAttempt.headers,
     signal: withTimeout(timeoutMs)
   });
+
+  if (!response.ok && isAuthStatus(response.status)) {
+    if (firstAttempt.cookieSource === "env") {
+      throw buildXueqiuAuthError(
+        `xueqiu auth failed (${response.status} ${response.statusText}) using XUEQIU_COOKIE. Please refresh XUEQIU_COOKIE.`,
+        { authStatus: response.status, cookieSource: "env", refreshed: false, retryAttempt: 0 }
+      );
+    }
+
+    logStockDataEvent("xueqiu.auth_retry", {
+      status: response.status,
+      statusText: response.statusText,
+      cookieSource: firstAttempt.cookieSource
+    }, "notice");
+
+    clearXueqiuCookieCache();
+    const retryAttempt = await createHeaders(true);
+    response = await fetchImpl(requestUrl, {
+      headers: retryAttempt.headers,
+      signal: withTimeout(timeoutMs)
+    });
+
+    if (!response.ok && isAuthStatus(response.status)) {
+      logStockDataEvent("xueqiu.auth_retry_failed", {
+        status: response.status,
+        statusText: response.statusText,
+        cookieSource: retryAttempt.cookieSource
+      }, "warning");
+      throw buildXueqiuAuthError(
+        `xueqiu auth failed after cookie refresh (${response.status} ${response.statusText})`,
+        { authStatus: response.status, cookieSource: retryAttempt.cookieSource, refreshed: true, retryAttempt: 1 }
+      );
+    }
+  }
 
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);

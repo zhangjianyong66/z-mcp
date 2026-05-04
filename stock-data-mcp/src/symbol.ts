@@ -111,6 +111,6 @@ export function normalizeEtfBatchKlineInput(
 export function normalizeSectorListInput(input: SectorListInput = {}): NormalizedSectorListInput {
   return {
     sortBy: input.sortBy ?? "hot",
-    timeoutMs: normalizeTimeoutSeconds(input.timeout ?? 20) * 1000
+    timeoutMs: normalizeTimeoutSeconds(input.timeout ?? 60) * 1000
   };
 }

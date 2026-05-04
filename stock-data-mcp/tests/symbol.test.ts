@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   normalizeEtfInput,
   normalizeEtfKlineInput,
+  normalizeSectorListInput,
   normalizeSymbol
 } from "../src/symbol.js";
 
@@ -35,4 +36,10 @@ test("normalizeEtfKlineInput clamps day range", () => {
   const input = normalizeEtfKlineInput({ symbol: "159930", days: 999 }, "xueqiu");
   assert.equal(input.days, 180);
   assert.equal(input.provider, "xueqiu");
+});
+
+test("normalizeSectorListInput applies default timeout of 60 seconds", () => {
+  const input = normalizeSectorListInput();
+  assert.equal(input.sortBy, "hot");
+  assert.equal(input.timeoutMs, 60_000);
 });

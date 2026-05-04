@@ -441,16 +441,22 @@ test("runSectorList fails after max retries on transient sector provider errors"
     }
   };
 
-  await assert.rejects(
-    runSectorList(
-      { sortBy: "gainers" },
-      {
-        provider,
-        newsFetcher: async () => []
-      }
-    ),
-    /No tables found/
+  const error = await runSectorList(
+    { sortBy: "gainers" },
+    {
+      provider,
+      newsFetcher: async () => []
+    }
+  ).then(
+    () => null,
+    (reason: unknown) => reason
   );
 
+  assert.ok(error instanceof Error);
+  assert.match(error.message, /No tables found/);
+  const details = (error as Error & { details?: Record<string, unknown> }).details;
+  assert.equal(details?.attemptsUsed, 3);
+  assert.equal(details?.timeoutMs, 60_000);
+  assert.equal(typeof details?.elapsedMs, "number");
   assert.equal(attempts, 3);
 });

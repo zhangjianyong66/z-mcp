@@ -24,6 +24,17 @@ type AkshareProviderOptions = {
   scriptPath?: string;
 };
 
+type RunnerErrorDetails = {
+  type: "timeout" | "process_error" | "empty_stdout" | "missing_dependency" | "unknown_error";
+  pythonBin: string;
+  scriptPath: string;
+  exitCode?: number | null;
+  signal?: string | null;
+  killed?: boolean;
+  stderrSnippet?: string;
+  stdoutSnippet?: string;
+};
+
 function resolvePythonBin(): string {
   const fromEnv = process.env.AKSHARE_PYTHON_BIN?.trim();
   if (fromEnv) {
@@ -116,6 +127,13 @@ function parseAksharePayload(payload: unknown): SectorSnapshotItem[] {
 
 async function defaultRunnerFactory(scriptPath: string): Promise<AkshareRunner> {
   const pythonBin = resolvePythonBin();
+
+  const buildRunnerError = (message: string, details: RunnerErrorDetails): Error => {
+    const error = new Error(message) as Error & { details?: RunnerErrorDetails };
+    error.details = details;
+    return error;
+  };
+
   return async (timeoutMs: number, context?: StockDataLogContext) => {
     logStockDataEvent("akshare.runner.start", {
       requestId: context?.requestId,
@@ -139,19 +157,72 @@ async function defaultRunnerFactory(scriptPath: string): Promise<AkshareRunner> 
       }
 
       if (!stdout?.trim()) {
-        throw new Error("akshare returned empty stdout");
+        throw buildRunnerError("akshare returned empty stdout", {
+          type: "empty_stdout",
+          pythonBin,
+          scriptPath,
+          stderrSnippet: stderr?.trim().slice(0, 500),
+          stdoutSnippet: stdout?.trim().slice(0, 500)
+        });
       }
 
       return JSON.parse(stdout);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const errorObject = error as {
+        code?: string | number;
+        signal?: string | null;
+        killed?: boolean;
+        stderr?: string;
+        stdout?: string;
+      };
+      const stderrSnippet = typeof errorObject.stderr === "string" ? errorObject.stderr.trim().slice(0, 500) : undefined;
+      const stdoutSnippet = typeof errorObject.stdout === "string" ? errorObject.stdout.trim().slice(0, 500) : undefined;
+      const isTimeout = errorObject.code === "ETIMEDOUT" || message.toLowerCase().includes("timed out");
+
       if (message.includes("No module named 'akshare'") || message.includes('No module named "akshare"')) {
-        throw new Error(
+        throw buildRunnerError(
           `akshare python execution failed: missing python dependency 'akshare' in ${pythonBin}. ` +
-          `Install with: ${pythonBin} -m pip install -U akshare. Raw error: ${message}`
+          `Install with: ${pythonBin} -m pip install -U akshare. Raw error: ${message}`,
+          {
+            type: "missing_dependency",
+            pythonBin,
+            scriptPath,
+            exitCode: typeof errorObject.code === "number" ? errorObject.code : undefined,
+            signal: errorObject.signal ?? null,
+            killed: errorObject.killed,
+            stderrSnippet,
+            stdoutSnippet
+          }
         );
       }
-      throw new Error(`akshare python execution failed (python=${pythonBin}): ${message}`);
+
+      if (isTimeout) {
+        throw buildRunnerError(
+          `akshare python execution timed out (python=${pythonBin}, timeoutMs=${timeoutMs}): ${message}`,
+          {
+            type: "timeout",
+            pythonBin,
+            scriptPath,
+            exitCode: typeof errorObject.code === "number" ? errorObject.code : null,
+            signal: errorObject.signal ?? null,
+            killed: errorObject.killed,
+            stderrSnippet,
+            stdoutSnippet
+          }
+        );
+      }
+
+      throw buildRunnerError(`akshare python execution failed (python=${pythonBin}): ${message}`, {
+        type: "process_error",
+        pythonBin,
+        scriptPath,
+        exitCode: typeof errorObject.code === "number" ? errorObject.code : undefined,
+        signal: errorObject.signal ?? null,
+        killed: errorObject.killed,
+        stderrSnippet,
+        stdoutSnippet
+      });
     }
   };
 }

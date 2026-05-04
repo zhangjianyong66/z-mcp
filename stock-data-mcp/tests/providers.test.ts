@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   clearXueqiuCookieCache,
+  createXueqiuProvider,
   mapXueqiuQuote,
   parseXueqiuKlines,
   resolveXueqiuCookie,
+  setXueqiuFetchForTests,
   setXueqiuCookieLoaderForTests
 } from "../src/providers/xueqiu.js";
 
@@ -85,5 +87,107 @@ test("resolveXueqiuCookie caches auto-loaded cookie", async () => {
       process.env.XUEQIU_COOKIE = previous;
     }
     setXueqiuCookieLoaderForTests();
+  }
+});
+
+test("xueqiu provider retries once after 401 with auto cookie", async () => {
+  const previous = process.env.XUEQIU_COOKIE;
+  delete process.env.XUEQIU_COOKIE;
+  clearXueqiuCookieCache();
+
+  const loadedCookies = ["xq_a_token=old_cookie", "xq_a_token=new_cookie"];
+  let loaderCalls = 0;
+  setXueqiuCookieLoaderForTests(async () => {
+    const value = loadedCookies[Math.min(loaderCalls, loadedCookies.length - 1)]!;
+    loaderCalls += 1;
+    return value;
+  });
+
+  const seenCookies: string[] = [];
+  let fetchCalls = 0;
+  setXueqiuFetchForTests(async (_url, init) => {
+    fetchCalls += 1;
+    const headers = init?.headers as Record<string, string> | undefined;
+    seenCookies.push(headers?.Cookie ?? "");
+    if (fetchCalls === 1) {
+      return {
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        json: async () => ({})
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ data: { current: 1.23 } })
+    } as Response;
+  });
+
+  try {
+    const provider = createXueqiuProvider();
+    const quote = await provider.quote({
+      symbol: "510300",
+      provider: "xueqiu",
+      timeoutMs: 10_000,
+      normalizedSymbol: { code: "510300", market: "SH", prefixed: "SH510300", secid: "1.510300" }
+    });
+    assert.equal(quote.price, 1.23);
+    assert.equal(fetchCalls, 2);
+    assert.equal(loaderCalls, 2);
+    assert.deepEqual(seenCookies, ["xq_a_token=old_cookie", "xq_a_token=new_cookie"]);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.XUEQIU_COOKIE;
+    } else {
+      process.env.XUEQIU_COOKIE = previous;
+    }
+    setXueqiuFetchForTests();
+    setXueqiuCookieLoaderForTests();
+  }
+});
+
+test("xueqiu provider returns actionable error for env cookie on 401", async () => {
+  const previous = process.env.XUEQIU_COOKIE;
+  process.env.XUEQIU_COOKIE = "xq_a_token=env_cookie";
+  clearXueqiuCookieCache();
+
+  let fetchCalls = 0;
+  setXueqiuFetchForTests(async () => {
+    fetchCalls += 1;
+    return {
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: async () => ({})
+    } as Response;
+  });
+
+  try {
+    const provider = createXueqiuProvider();
+    const error = await provider.quote({
+      symbol: "510300",
+      provider: "xueqiu",
+      timeoutMs: 10_000,
+      normalizedSymbol: { code: "510300", market: "SH", prefixed: "SH510300", secid: "1.510300" }
+    }).then(
+      () => null,
+      (reason: unknown) => reason
+    );
+
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /Please refresh XUEQIU_COOKIE/);
+    const details = (error as Error & { details?: Record<string, unknown> }).details;
+    assert.equal(details?.cookieSource, "env");
+    assert.equal(details?.refreshed, false);
+    assert.equal(fetchCalls, 1);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.XUEQIU_COOKIE;
+    } else {
+      process.env.XUEQIU_COOKIE = previous;
+    }
+    setXueqiuFetchForTests();
   }
 });

@@ -73,7 +73,8 @@ function buildGeneratedAt(now: () => Date): string {
 
 const DEFAULT_BATCH_CONCURRENCY = 5;
 const SECTOR_LIST_MAX_ATTEMPTS = 3;
-const SECTOR_LIST_RETRY_DELAY_MS = 300;
+const SECTOR_LIST_RETRY_DELAY_MS = 800;
+const SECTOR_LIST_MIN_ATTEMPT_TIMEOUT_MS = 5_000;
 
 function isAbortLikeError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -131,24 +132,80 @@ async function fetchSectorBaseItemsWithRetry(
   context?: StockDataLogContext
 ): Promise<SectorSnapshotItem[]> {
   let lastError: unknown = null;
+  const startedAt = Date.now();
 
   for (let attempt = 1; attempt <= SECTOR_LIST_MAX_ATTEMPTS; attempt += 1) {
+    const elapsedMs = Date.now() - startedAt;
+    const remainingBudgetMs = normalized.timeoutMs - elapsedMs;
+    const remainingAttempts = SECTOR_LIST_MAX_ATTEMPTS - attempt + 1;
+    if (remainingBudgetMs <= 0) {
+      const budgetError = new Error(
+        `sector_list exhausted timeout budget before attempt ${attempt}: ` +
+        `elapsedMs=${elapsedMs}, timeoutMs=${normalized.timeoutMs}`
+      ) as Error & { details?: Record<string, unknown> };
+      budgetError.details = {
+        lastErrorType: "timeout_budget_exhausted",
+        attemptsUsed: attempt - 1,
+        elapsedMs,
+        timeoutMs: normalized.timeoutMs
+      };
+      throw budgetError;
+    }
+
+    const attemptTimeoutMs = Math.max(
+      SECTOR_LIST_MIN_ATTEMPT_TIMEOUT_MS,
+      Math.floor(remainingBudgetMs / remainingAttempts)
+    );
+
     try {
-      return await provider.listIndustrySummary(normalized, context);
+      return await provider.listIndustrySummary(
+        {
+          ...normalized,
+          timeoutMs: Math.min(attemptTimeoutMs, remainingBudgetMs)
+        },
+        context
+      );
     } catch (error) {
       lastError = error;
       if (!isRetryableSectorListError(error) || attempt >= SECTOR_LIST_MAX_ATTEMPTS) {
-        throw error;
+        const enriched = error instanceof Error ? error : new Error(String(error));
+        const elapsedOnFailureMs = Date.now() - startedAt;
+        const details = {
+          ...(((enriched as Error & { details?: Record<string, unknown> }).details ?? {}) as Record<string, unknown>),
+          attemptsUsed: attempt,
+          elapsedMs: elapsedOnFailureMs,
+          timeoutMs: normalized.timeoutMs,
+          lastErrorType: isAbortLikeError(error) ? "timeout" : "provider_error"
+        };
+        (enriched as Error & { details?: Record<string, unknown> }).details = details;
+        throw enriched;
       }
 
+      const elapsedAfterErrorMs = Date.now() - startedAt;
+      const remainingAfterErrorMs = normalized.timeoutMs - elapsedAfterErrorMs;
       logStockDataEvent("sector_list.retry", {
         requestId: context?.requestId,
         attempt,
         nextAttempt: attempt + 1,
         maxAttempts: SECTOR_LIST_MAX_ATTEMPTS,
         delayMs: SECTOR_LIST_RETRY_DELAY_MS,
+        elapsedMs: elapsedAfterErrorMs,
+        remainingBudgetMs: remainingAfterErrorMs,
         error: error instanceof Error ? error.message : String(error)
       }, "notice");
+      if (remainingAfterErrorMs <= SECTOR_LIST_RETRY_DELAY_MS) {
+        const budgetError = new Error(
+          `sector_list timeout budget exhausted after attempt ${attempt}: ` +
+          `elapsedMs=${elapsedAfterErrorMs}, timeoutMs=${normalized.timeoutMs}`
+        ) as Error & { details?: Record<string, unknown> };
+        budgetError.details = {
+          lastErrorType: "timeout_budget_exhausted",
+          attemptsUsed: attempt,
+          elapsedMs: elapsedAfterErrorMs,
+          timeoutMs: normalized.timeoutMs
+        };
+        throw budgetError;
+      }
       await sleep(SECTOR_LIST_RETRY_DELAY_MS);
     }
   }

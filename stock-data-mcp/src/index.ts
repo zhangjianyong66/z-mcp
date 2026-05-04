@@ -51,11 +51,16 @@ async function runTool<T>(
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const errorDetails =
+      error && typeof error === "object" && "details" in error
+        ? (error as { details?: unknown }).details
+        : undefined;
     logStockDataEvent("tool.error", {
       requestId,
       tool,
       durationMs: Date.now() - startedAt,
-      error: message
+      error: message,
+      ...(errorDetails ? { errorDetails } : {})
     }, "error");
     throw error;
   }
