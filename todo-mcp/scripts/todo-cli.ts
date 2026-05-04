@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import "dotenv/config";
 import readline from "node:readline";
+import { pathToFileURL } from "node:url";
 import { loadConfig } from "../src/config.js";
 import { TodoService } from "../src/service.js";
 import { TodoStore } from "../src/store.js";
@@ -71,6 +72,43 @@ function truncateSingleLine(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars - 1)}…`;
 }
 
+type KeypressEvent = { name?: string; sequence?: string; ctrl?: boolean };
+
+export function getTotalPages(totalItems: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(totalItems / pageSize));
+}
+
+function getPageRange(totalItems: number, pageSize: number, currentPage: number): { start: number; end: number } {
+  const start = currentPage * pageSize;
+  const end = Math.min(start + pageSize, totalItems);
+  return { start, end };
+}
+
+export function clampPage(currentPage: number, totalItems: number, pageSize: number): number {
+  const totalPages = getTotalPages(totalItems, pageSize);
+  return Math.max(0, Math.min(currentPage, totalPages - 1));
+}
+
+export function clampSelectionToPage(
+  selectedIndex: number,
+  totalItems: number,
+  pageSize: number,
+  currentPage: number
+): number {
+  if (totalItems <= 0) return 0;
+  const safePage = clampPage(currentPage, totalItems, pageSize);
+  const { start, end } = getPageRange(totalItems, pageSize, safePage);
+  return Math.max(start, Math.min(selectedIndex, Math.max(start, end - 1)));
+}
+
+export function isPrevPageKey(str: string, key: KeypressEvent): boolean {
+  return str === "[" || key.name === "pageup" || key.name === "left";
+}
+
+export function isNextPageKey(str: string, key: KeypressEvent): boolean {
+  return str === "]" || key.name === "pagedown" || key.name === "right";
+}
+
 // ---------- 数据层 ----------
 
 async function loadPlans(): Promise<PlanWithProgress[]> {
@@ -132,7 +170,7 @@ function filterTree(tree: PlanTree, filter: PlanFilter): { tasks: PlanTreeTask[]
 
 // ---------- 渲染层 ----------
 
-function printPlanList(
+export function printPlanList(
   plans: PlanWithProgress[],
   filter: PlanFilter,
   selectedIndex: number,
@@ -141,9 +179,8 @@ function printPlanList(
 ) {
   const filtered = filterPlans(plans, filter);
   const filterLabel = filter === "todo" ? "未完成计划" : "已完成计划";
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const start = currentPage * pageSize;
-  const end = Math.min(start + pageSize, filtered.length);
+  const totalPages = getTotalPages(filtered.length, pageSize);
+  const { start, end } = getPageRange(filtered.length, pageSize, currentPage);
   const pageItems = filtered.slice(start, end);
 
   clearScreen();
@@ -152,9 +189,10 @@ function printPlanList(
   console.log("==================");
   console.log(`按 [Tab] 切换: ${filterLabel}`);
   console.log("按 [↑↓] 选择  [Enter] 确认  [q] 返回");
-  if (filtered.length > pageSize) {
+  if (totalPages > 1) {
     console.log(`按 [ ] 翻页: 第 ${currentPage + 1}/${totalPages} 页`);
   }
+  console.log(`总计划: ${filtered.length}`);
   console.log("");
 
   if (filtered.length === 0) {
@@ -173,7 +211,7 @@ function printPlanList(
   console.log("==================");
 }
 
-function printPlanTaskList(
+export function printPlanTaskList(
   tree: PlanTree,
   filter: PlanFilter,
   selectedIndex: number,
@@ -183,9 +221,8 @@ function printPlanTaskList(
   const filtered = filterTree(tree, filter);
   const plan = tree.plan;
   const filterLabel = filter === "todo" ? "未完成" : "已完成";
-  const totalPages = Math.max(1, Math.ceil(filtered.tasks.length / pageSize));
-  const start = currentPage * pageSize;
-  const end = Math.min(start + pageSize, filtered.tasks.length);
+  const totalPages = getTotalPages(filtered.tasks.length, pageSize);
+  const { start, end } = getPageRange(filtered.tasks.length, pageSize, currentPage);
   const pageTasks = filtered.tasks.slice(start, end);
 
   clearScreen();
@@ -197,9 +234,10 @@ function printPlanTaskList(
   console.log("==================");
   console.log(`按 [Tab] 切换: ${filterLabel}`);
   console.log("按 [↑↓] 选择  [Enter] 进入任务  [q] 返回");
-  if (filtered.tasks.length > pageSize) {
+  if (totalPages > 1) {
     console.log(`按 [ ] 翻页: 第 ${currentPage + 1}/${totalPages} 页`);
   }
+  console.log(`总任务: ${filtered.tasks.length}`);
   console.log("");
 
   const s = filtered.summary;
@@ -224,7 +262,7 @@ function printPlanTaskList(
   console.log("==================");
 }
 
-function printTaskDetail(
+export function printTaskDetail(
   tree: PlanTree,
   task: PlanTreeTask,
   filter: PlanFilter,
@@ -235,10 +273,9 @@ function printTaskDetail(
   const plan = tree.plan;
   const filterLabel = filter === "todo" ? "未完成" : "已完成";
   const filteredSubtasks = task.subtasks.filter((sub) => sub.status === filter);
-  const totalPages = Math.max(1, Math.ceil(filteredSubtasks.length / detailPageSize));
-  const safePage = Math.max(0, Math.min(detailPage, totalPages - 1));
-  const start = safePage * detailPageSize;
-  const end = Math.min(start + detailPageSize, filteredSubtasks.length);
+  const totalPages = getTotalPages(filteredSubtasks.length, detailPageSize);
+  const safePage = clampPage(detailPage, filteredSubtasks.length, detailPageSize);
+  const { start, end } = getPageRange(filteredSubtasks.length, detailPageSize, safePage);
   const pageSubtasks = filteredSubtasks.slice(start, end);
   const maxTitleChars = Math.max(12, termCols - 14);
 
@@ -248,9 +285,10 @@ function printTaskDetail(
   console.log("==================");
   console.log(`按 [Tab] 切换: ${filterLabel}`);
   console.log("按 [Enter/q] 返回任务列表");
-  if (filteredSubtasks.length > detailPageSize) {
+  if (totalPages > 1) {
     console.log(`按 [ ] 翻页: 第 ${safePage + 1}/${totalPages} 页`);
   }
+  console.log(`总子任务: ${filteredSubtasks.length}`);
   console.log("");
 
   const due = task.due_date ? ` (due ${formatDate(task.due_date)})` : "";
@@ -310,17 +348,16 @@ async function planListPage(allPlans: PlanWithProgress[]): Promise<string | null
     let currentPage = 0;
     const pageSize = Math.max(5, (process.stdout.rows || 20) - 10);
 
-    const getTotalPages = () => Math.max(1, Math.ceil(filtered.length / pageSize));
+    const getCurrentTotalPages = () => getTotalPages(filtered.length, pageSize);
 
     const render = () => {
       filtered = filterPlans(allPlans, filter);
-      const totalPages = getTotalPages();
-      if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
-      if (selectedIndex >= filtered.length) selectedIndex = Math.max(0, filtered.length - 1);
+      currentPage = clampPage(currentPage, filtered.length, pageSize);
+      selectedIndex = clampSelectionToPage(selectedIndex, filtered.length, pageSize, currentPage);
       printPlanList(allPlans, filter, selectedIndex, pageSize, currentPage);
     };
 
-    const onKeypress = (str: string, key: { name?: string; sequence?: string; ctrl?: boolean }) => {
+    const onKeypress = (str: string, key: KeypressEvent) => {
       if (key.ctrl && key.name === "c") {
         runCleanup();
         process.exit(0);
@@ -347,7 +384,7 @@ async function planListPage(allPlans: PlanWithProgress[]): Promise<string | null
         return;
       }
 
-      if (str === "[" || key.name === "pageup") {
+      if (isPrevPageKey(str, key)) {
         if (currentPage > 0) {
           currentPage--;
           selectedIndex = currentPage * pageSize;
@@ -356,8 +393,8 @@ async function planListPage(allPlans: PlanWithProgress[]): Promise<string | null
         return;
       }
 
-      if (str === "]" || key.name === "pagedown") {
-        const totalPages = getTotalPages();
+      if (isNextPageKey(str, key)) {
+        const totalPages = getCurrentTotalPages();
         if (currentPage < totalPages - 1) {
           currentPage++;
           selectedIndex = currentPage * pageSize;
@@ -408,19 +445,17 @@ async function planDetailPage(planId: string) {
     let currentTaskId: string | null = null;
     let detailPage = 0;
 
-    const getTotalPages = () => {
+    const getTaskListTotalPages = () => {
       const filtered = filterTree(tree, filter);
-      return Math.max(1, Math.ceil(filtered.tasks.length / pageSize));
+      return getTotalPages(filtered.tasks.length, pageSize);
     };
 
     const getFilteredTasks = () => filterTree(tree, filter).tasks;
 
     const clampSelection = () => {
       const filteredTasks = getFilteredTasks();
-      const totalPages = getTotalPages();
-      if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
-      if (selectedIndex >= filteredTasks.length) selectedIndex = Math.max(0, filteredTasks.length - 1);
-      if (selectedIndex < 0) selectedIndex = 0;
+      currentPage = clampPage(currentPage, filteredTasks.length, pageSize);
+      selectedIndex = clampSelectionToPage(selectedIndex, filteredTasks.length, pageSize, currentPage);
     };
 
     const render = () => {
@@ -434,15 +469,14 @@ async function planDetailPage(planId: string) {
           return;
         }
         const filteredSubtasks = task.subtasks.filter((sub) => sub.status === filter);
-        const totalDetailPages = Math.max(1, Math.ceil(filteredSubtasks.length / detailPageSize));
-        if (detailPage >= totalDetailPages) detailPage = Math.max(0, totalDetailPages - 1);
+        detailPage = clampPage(detailPage, filteredSubtasks.length, detailPageSize);
         printTaskDetail(tree, task, filter, detailPage, detailPageSize, termCols);
         return;
       }
       printPlanTaskList(tree, filter, selectedIndex, pageSize, currentPage);
     };
 
-    const onKeypress = (str: string, key: { name?: string; ctrl?: boolean }) => {
+    const onKeypress = (str: string, key: KeypressEvent) => {
       if (key.ctrl && key.name === "c") {
         runCleanup();
         process.exit(0);
@@ -474,7 +508,7 @@ async function planDetailPage(planId: string) {
         return;
       }
 
-      if (str === "[" || key.name === "pageup") {
+      if (isPrevPageKey(str, key)) {
         if (mode === "task_list") {
           if (currentPage > 0) {
             currentPage--;
@@ -488,9 +522,9 @@ async function planDetailPage(planId: string) {
         return;
       }
 
-      if (str === "]" || key.name === "pagedown") {
+      if (isNextPageKey(str, key)) {
         if (mode === "task_list") {
-          const totalPages = getTotalPages();
+          const totalPages = getTaskListTotalPages();
           if (currentPage < totalPages - 1) {
             currentPage++;
             selectedIndex = currentPage * pageSize;
@@ -500,7 +534,7 @@ async function planDetailPage(planId: string) {
           const filteredTasks = getFilteredTasks();
           const task = currentTaskId ? filteredTasks.find((t) => t.id === currentTaskId) : undefined;
           const subtaskCount = task ? task.subtasks.filter((sub) => sub.status === filter).length : 0;
-          const totalDetailPages = Math.max(1, Math.ceil(subtaskCount / detailPageSize));
+          const totalDetailPages = getTotalPages(subtaskCount, detailPageSize);
           if (detailPage < totalDetailPages - 1) {
             detailPage++;
             render();
@@ -752,4 +786,7 @@ async function main() {
   }
 }
 
-main();
+const entryHref = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (import.meta.url === entryHref) {
+  void main();
+}
