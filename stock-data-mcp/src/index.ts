@@ -18,6 +18,7 @@ import {
 } from "./logging.js";
 import { warmXueqiuCookie } from "./providers/xueqiu.js";
 import { getPortfolioAndOrders, saveOrders, savePortfolio } from "./portfolio-store.js";
+import { compressBatchResult } from "./batch-response.js";
 
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
   const message = error instanceof Error ? error.message : String(error);
@@ -221,7 +222,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(result)
+            text: JSON.stringify(compressBatchResult(result))
           }
         ]
       };
@@ -249,7 +250,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(result)
+            text: JSON.stringify(compressBatchResult(result))
           }
         ]
       };
@@ -277,7 +278,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(result)
+            text: JSON.stringify(compressBatchResult(result))
           }
         ]
       };
