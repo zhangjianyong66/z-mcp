@@ -2,3 +2,4 @@ dist/
 node_modules/
 .env
 *_response.json
+skills/etf-scanner/artifacts/
