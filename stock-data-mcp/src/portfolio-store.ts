@@ -1,26 +1,42 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type {
-  PortfolioData,
   PortfolioOrder,
   PortfolioPosition,
   PortfolioSnapshot,
   SaveOrdersResult,
   SavePortfolioResult
 } from "./types.js";
+import { getDbPool } from "./db.js";
 
-const DEFAULT_DATA_FILE = join(homedir(), ".stock-data-mcp", "user-data.json");
 const SHANGHAI_TIMEZONE = "Asia/Shanghai";
 const MARKET_VALUE_TOLERANCE = 0.01;
 
-function resolveDataFilePath(): string {
-  const fromEnv = process.env.STOCK_DATA_MCP_USER_DATA_FILE?.trim();
-  if (fromEnv && fromEnv.length > 0) {
-    return fromEnv;
-  }
-  return DEFAULT_DATA_FILE;
-}
+type PortfolioRow = RowDataPacket & {
+  id: number;
+  total_capital: number;
+  available_capital: number;
+  updated_at: string | Date;
+};
+
+type PositionRow = RowDataPacket & {
+  symbol: string;
+  name: string;
+  quantity: number;
+  cost_price: number;
+  current_price: number;
+  market_value: number;
+};
+
+type OrderRow = RowDataPacket & {
+  id: number;
+  order_id: string | null;
+  symbol: string;
+  name: string;
+  side: "buy" | "sell";
+  quantity: number;
+  order_time: string | Date;
+  status: "pending" | "filled" | "cancelled" | "expired";
+};
 
 function toShanghaiDayKey(isoTime: string): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -37,6 +53,14 @@ function toShanghaiDayKey(isoTime: string): string {
     throw new Error(`failed to format date in ${SHANGHAI_TIMEZONE}`);
   }
   return `${year}-${month}-${day}`;
+}
+
+function toIsoTime(value: string | Date): string {
+  return new Date(value).toISOString();
+}
+
+function toMysqlDatetime(isoTime: string): string {
+  return isoTime.slice(0, 19).replace("T", " ");
 }
 
 function applyOrderAutoExpire(orders: PortfolioOrder[], now: Date): { orders: PortfolioOrder[]; expiredCount: number } {
@@ -87,30 +111,6 @@ function buildOrderStats(orders: PortfolioOrder[]): PortfolioSnapshot["stats"] {
   return stats;
 }
 
-async function readStore(path: string): Promise<PortfolioData | null> {
-  try {
-    const raw = await readFile(path, "utf8");
-    const parsed = JSON.parse(raw) as PortfolioData;
-    return {
-      portfolio: parsed.portfolio ?? null,
-      orders: Array.isArray(parsed.orders) ? parsed.orders : []
-    };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
-}
-
-async function writeStore(path: string, data: PortfolioData): Promise<void> {
-  const folder = dirname(path);
-  await mkdir(folder, { recursive: true });
-  const tmpPath = `${path}.tmp`;
-  await writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-  await rename(tmpPath, path);
-}
-
 function buildPortfolioWarnings(positions: PortfolioPosition[]): string[] {
   const warnings: string[] = [];
   for (const position of positions) {
@@ -125,44 +125,154 @@ function buildPortfolioWarnings(positions: PortfolioPosition[]): string[] {
   return warnings;
 }
 
+async function loadOrders(): Promise<PortfolioOrder[]> {
+  const pool = getDbPool();
+  const [rows] = await pool.query<OrderRow[]>(
+    "SELECT id, order_id, symbol, name, side, quantity, order_time, status FROM etf_orders ORDER BY id ASC"
+  );
+
+  return rows.map((row) => ({
+    orderId: row.order_id ?? undefined,
+    symbol: row.symbol,
+    name: row.name,
+    side: row.side,
+    quantity: Number(row.quantity),
+    orderTime: toIsoTime(row.order_time),
+    status: row.status
+  }));
+}
+
+async function overwriteOrders(orders: PortfolioOrder[]): Promise<void> {
+  const pool = getDbPool();
+  const conn = await pool.getConnection();
+
+  try {
+    await conn.beginTransaction();
+    await conn.query("DELETE FROM etf_orders");
+
+    if (orders.length > 0) {
+      const values = orders.map((order) => [
+        order.orderId ?? null,
+        order.symbol,
+        order.name,
+        order.side,
+        order.quantity,
+        toMysqlDatetime(order.orderTime),
+        order.status
+      ]);
+      await conn.query(
+        "INSERT INTO etf_orders (order_id, symbol, name, side, quantity, order_time, status) VALUES ?",
+        [values]
+      );
+    }
+
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 export async function savePortfolio(input: {
   totalCapital: number;
   availableCapital: number;
   positions: PortfolioPosition[];
   updatedAt?: string;
 }, now: Date = new Date()): Promise<SavePortfolioResult> {
-  const path = resolveDataFilePath();
-  const store = (await readStore(path)) ?? { portfolio: null, orders: [] };
+  const pool = getDbPool();
+  const conn = await pool.getConnection();
   const updatedAt = input.updatedAt ?? now.toISOString();
-  const nextPortfolio = {
-    totalCapital: input.totalCapital,
-    availableCapital: input.availableCapital,
-    positions: input.positions,
-    updatedAt
-  };
 
-  const expiredApplied = applyOrderAutoExpire(store.orders, now);
-  await writeStore(path, {
-    portfolio: nextPortfolio,
-    orders: expiredApplied.orders
-  });
+  try {
+    await conn.beginTransaction();
 
-  return {
-    portfolio: nextPortfolio,
-    warnings: buildPortfolioWarnings(nextPortfolio.positions),
-    autoExpiredOrderCount: expiredApplied.expiredCount
-  };
+    const [ordersRows] = await conn.query<OrderRow[]>(
+      "SELECT id, order_id, symbol, name, side, quantity, order_time, status FROM etf_orders ORDER BY id ASC"
+    );
+
+    const currentOrders: PortfolioOrder[] = ordersRows.map((row) => ({
+      orderId: row.order_id ?? undefined,
+      symbol: row.symbol,
+      name: row.name,
+      side: row.side,
+      quantity: Number(row.quantity),
+      orderTime: toIsoTime(row.order_time),
+      status: row.status
+    }));
+
+    const expiredApplied = applyOrderAutoExpire(currentOrders, now);
+
+    if (expiredApplied.expiredCount > 0) {
+      await conn.query("DELETE FROM etf_orders");
+      if (expiredApplied.orders.length > 0) {
+        const values = expiredApplied.orders.map((order) => [
+          order.orderId ?? null,
+          order.symbol,
+          order.name,
+          order.side,
+          order.quantity,
+          toMysqlDatetime(order.orderTime),
+          order.status
+        ]);
+        await conn.query(
+          "INSERT INTO etf_orders (order_id, symbol, name, side, quantity, order_time, status) VALUES ?",
+          [values]
+        );
+      }
+    }
+
+    await conn.query("DELETE FROM etf_positions");
+    await conn.query("DELETE FROM etf_portfolios");
+
+    const [insertPortfolioResult] = await conn.query<ResultSetHeader>(
+      "INSERT INTO etf_portfolios (total_capital, available_capital, updated_at) VALUES (?, ?, ?)",
+      [input.totalCapital, input.availableCapital, toMysqlDatetime(updatedAt)]
+    );
+
+    const portfolioId = insertPortfolioResult.insertId;
+    if (input.positions.length > 0) {
+      const values = input.positions.map((position) => [
+        portfolioId,
+        position.symbol,
+        position.name,
+        position.quantity,
+        position.costPrice,
+        position.currentPrice,
+        position.marketValue
+      ]);
+      await conn.query(
+        "INSERT INTO etf_positions (portfolio_id, symbol, name, quantity, cost_price, current_price, market_value) VALUES ?",
+        [values]
+      );
+    }
+
+    await conn.commit();
+
+    const nextPortfolio = {
+      totalCapital: input.totalCapital,
+      availableCapital: input.availableCapital,
+      positions: input.positions,
+      updatedAt
+    };
+
+    return {
+      portfolio: nextPortfolio,
+      warnings: buildPortfolioWarnings(nextPortfolio.positions),
+      autoExpiredOrderCount: expiredApplied.expiredCount
+    };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 }
 
 export async function saveOrders(orders: PortfolioOrder[], now: Date = new Date()): Promise<SaveOrdersResult> {
-  const path = resolveDataFilePath();
-  const store = (await readStore(path)) ?? { portfolio: null, orders: [] };
   const expiredApplied = applyOrderAutoExpire(orders, now);
-
-  await writeStore(path, {
-    portfolio: store.portfolio,
-    orders: expiredApplied.orders
-  });
+  await overwriteOrders(expiredApplied.orders);
 
   return {
     orders: expiredApplied.orders,
@@ -172,41 +282,53 @@ export async function saveOrders(orders: PortfolioOrder[], now: Date = new Date(
 }
 
 export async function getPortfolioAndOrders(now: Date = new Date()): Promise<PortfolioSnapshot> {
-  const path = resolveDataFilePath();
-  const store = await readStore(path);
+  const pool = getDbPool();
 
-  if (!store) {
+  const [portfolioRows] = await pool.query<PortfolioRow[]>(
+    "SELECT id, total_capital, available_capital, updated_at FROM etf_portfolios ORDER BY id DESC LIMIT 1"
+  );
+  const orders = await loadOrders();
+
+  const expiredApplied = applyOrderAutoExpire(orders, now);
+  if (expiredApplied.expiredCount > 0) {
+    await overwriteOrders(expiredApplied.orders);
+  }
+
+  if (portfolioRows.length === 0) {
     return {
       portfolio: null,
-      orders: [],
-      stats: {
-        total: 0,
-        pending: 0,
-        filled: 0,
-        cancelled: 0,
-        expired: 0
-      },
+      orders: expiredApplied.orders,
+      stats: buildOrderStats(expiredApplied.orders),
       generatedAt: now.toISOString(),
-      message: "当前无持仓信息，请先保存持仓或交易单信息"
+      autoExpiredOrderCount: expiredApplied.expiredCount,
+      message: expiredApplied.orders.length > 0 ? undefined : "当前无持仓信息，请先保存持仓或交易单信息"
     };
   }
 
-  const expiredApplied = applyOrderAutoExpire(store.orders, now);
-  if (expiredApplied.expiredCount > 0) {
-    await writeStore(path, {
-      portfolio: store.portfolio,
-      orders: expiredApplied.orders
-    });
-  }
+  const latestPortfolio = portfolioRows[0];
+  const [positionRows] = await pool.query<PositionRow[]>(
+    "SELECT symbol, name, quantity, cost_price, current_price, market_value FROM etf_positions WHERE portfolio_id = ? ORDER BY id ASC",
+    [latestPortfolio.id]
+  );
 
   return {
-    portfolio: store.portfolio,
+    portfolio: {
+      totalCapital: Number(latestPortfolio.total_capital),
+      availableCapital: Number(latestPortfolio.available_capital),
+      positions: positionRows.map((row) => ({
+        symbol: row.symbol,
+        name: row.name,
+        quantity: Number(row.quantity),
+        costPrice: Number(row.cost_price),
+        currentPrice: Number(row.current_price),
+        marketValue: Number(row.market_value)
+      })),
+      updatedAt: toIsoTime(latestPortfolio.updated_at)
+    },
     orders: expiredApplied.orders,
     stats: buildOrderStats(expiredApplied.orders),
     generatedAt: now.toISOString(),
     autoExpiredOrderCount: expiredApplied.expiredCount,
-    message: store.portfolio || expiredApplied.orders.length > 0
-      ? undefined
-      : "当前无持仓信息，请先保存持仓或交易单信息"
+    message: undefined
   };
 }

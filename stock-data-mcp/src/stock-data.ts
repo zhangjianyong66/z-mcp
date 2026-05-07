@@ -37,7 +37,8 @@ import type {
   SectorListResponse,
   SectorProviderApi,
   SectorSnapshotItem,
-  StockDataLogContext
+  StockDataLogContext,
+  Trend
 } from "./types.js";
 
 export function createProviderMap(): EtfProviderMap {
@@ -54,7 +55,7 @@ function calculateAverage(values: number[]): number | null {
   return Number((sum / values.length).toFixed(3));
 }
 
-function getTrend(current: number, ma5: number | null, ma10: number | null): string {
+function getTrend(current: number, ma5: number | null, ma10: number | null): Trend {
   if (ma5 === null || ma10 === null) {
     return "insufficient_data";
   }

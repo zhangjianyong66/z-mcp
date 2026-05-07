@@ -33,6 +33,13 @@
   - 最多支持 20 个 symbol
   - 部分失败时返回 `results` 和 `errors`
   - 默认 provider：`xueqiu`
+- `etf_batch_decide`
+  - 批量计算 ETF 决策结果（评分、仓位、动作归因）
+  - 最多支持 20 个 symbol
+  - 自动读取 `get_portfolio_and_orders` 的账户快照
+  - 返回结构化 JSON：`globalChecks/results/watchlist/errors`
+  - 每个 `result` 新增 `marketState`（趋势/结构/均线偏离/安全边际）
+  - 触发 `UNIT_MISMATCH` 或账户快照缺失时全局中止
 - `etf_list`
   - 获取 ETF 列表
   - 默认按涨幅从高到低排序，也可以切换到跌幅、成交量、成交额、换手率排序
@@ -183,6 +190,21 @@ npm run build
 }
 ```
 
+`etf_batch_decide`:
+
+```json
+{
+  "symbols": ["159930", "510300"],
+  "days": 60,
+  "timeout": 20,
+  "riskPct": 0.01,
+  "singleEtfExposureCapPct": 0.2
+}
+```
+
+- `etf_batch_decide` 当前固定使用新版 `v2` 评分口径，不再暴露版本选择参数。
+- `riskRewardModel` 已废弃；传入会返回参数错误。
+
 `etf_list`:
 
 ```json
@@ -273,6 +295,33 @@ npm run build
 - `results`（每个 symbol 的 `quote`、`indicators`、`recentKlines`）
 - `errors`（失败项同上）
 
+`etf_batch_decide` 返回（每个 `result` 关键字段）：
+
+- `positioning`（`entryPrice/stopLoss/targetQty/deltaQty`）
+- `scoring`（LayerA/LayerB/total）
+- `action`、`actionReasons`
+  - `actionReasons` 常见值：
+    - `trend_not_tradeable`
+    - `structure_not_matched`
+    - `insufficient_safety_margin`
+    - `risk_not_definable`
+    - `insufficient_exposure_room`
+    - `single_exposure_limit`
+    - `capital_limit`
+    - `risk_limit`
+    - `unit_mismatch`
+    - `score_below_buy_threshold`
+    - `target_qty_below_lot`
+    - `pending_order_already_sufficient`
+    - `buy_signal_confirmed`（买入动作正向归因）
+    - `unknown_reason`（防御兜底，用于排障监控）
+- `marketState`
+  - `trend`、`trendZh`
+    - `trend` 可取：`bullish`（多头）、`bearish`（空头）、`rangebound`（震荡）、`insufficient_data`（数据不足）
+  - `price/ma5/ma10/ma20/high30/low30`
+  - `priceVsMa5Pct`、`priceVsMa10Pct`、`safetyMarginPct`
+  - `structurePass`、`structureReason`、`structureReasonZh`
+
 `etf_list` 返回：
 
 - `sortBy`
@@ -319,7 +368,11 @@ npm run build
 
 新增环境变量：
 
-- `STOCK_DATA_MCP_USER_DATA_FILE`：持仓/交易单存储文件路径（默认 `~/.stock-data-mcp/user-data.json`）
+- `DB_HOST`：MySQL 主机，默认 `mysql.zhangjianyong.top`
+- `DB_PORT`：MySQL 端口，默认 `3306`
+- `DB_NAME`：数据库名，默认 `web_projects_hub`
+- `DB_USER`：数据库用户，默认 `web_projects_hub_app`
+- `DB_PASS`：数据库密码（必填，无默认值）
 
 输入示例：
 
@@ -359,3 +412,79 @@ npm run build
   ]
 }
 ```
+
+## ETF 门禁与打分规则（`etf_batch_decide`）
+
+本节对应当前实现口径，用于解释 `LayerA`（门禁）与 `LayerB`（打分）。
+
+### LayerA 门禁（通过条件）
+
+`layerA.passed=true` 表示以下检查均通过：
+
+1. 趋势可交易
+- 仅 `bullish`（多头）或 `rangebound`（震荡）可通过趋势门。
+- 其他趋势触发 `trend_not_tradeable`。
+
+2. 结构通过
+- 多头：结构直接通过。
+- 震荡：需满足 `price <= ma5`，或 `abs(price-ma10)/price <= 0.015`。
+- 否则触发 `structure_not_matched`。
+
+3. 安全边际达标
+- 安全边际：`(high30-price)/high30`。
+- 小于 `0.04`（4%）触发 `insufficient_safety_margin`。
+
+4. 风险可定义
+- 必须 `stopLoss < entryPrice`，否则触发 `risk_not_definable`。
+
+5. 单标的暴露空间足够
+- 若 `symbolExposureQty < 100`（一手）触发 `insufficient_exposure_room`。
+
+6. 单位一致性检查通过
+- 若出现单位异常，触发 `unit_mismatch`，并进入全局中止路径。
+
+### LayerB 打分（总分）
+
+总分计算：
+
+`total = technicalPosition + riskReward + sectorHotness + executionFriction * 0.1`
+
+并在实现中执行 `min(100, total)` 封顶。
+
+1. `technicalPosition`（技术位置分）
+- 趋势基分：多头 `20`，震荡 `12`。
+- 位置分：
+  - `price <= ma5` 加 `12`
+  - 否则若 `abs(price-ma10)/price <= 0.015` 加 `8`
+  - 否则加 `0`
+- 安全边际分：`safetyMarginScore`，在 4%~12% 区间线性映射（约 3~12 分）。
+
+2. `riskReward`（风险收益分）
+- `rr = (high30-entryPrice)/(entryPrice-stopLoss)`。
+- `rr < 1` 记 `0`；`1~2` 线性（10->22）；`2~3` 线性（22->30）；`>=3` 记 `30`。
+
+3. `sectorHotness`（板块热度分）
+- 优先按 ETF->板块映射匹配当次 `sector_list(hot)` 的 `hotScore`（主映射，失败再备选）。
+- 再按分位映射到离散档位：`20 / 16 / 12 / 7 / 3`。
+- 若 `newsScoreDegraded=true`，该项乘 `0.85`。
+
+4. `executionFriction`（执行摩擦信号）
+- 根据挂单状态、目标增减、暴露余量等离散打分（常见 10/7/4/1）。
+- 该信号仅以 `0.1` 权重参与总分，且默认不在 `layerB` 对外单列返回。
+
+### 评分标尺版本
+
+- 当前固定使用 `v2` 口径：提高技术分与风险收益分中段斜率，并放宽板块热度分位切档，用于缓解分数整体偏低。
+
+### 动作与门禁/分数关系
+
+1. 单位不匹配：直接 `no_trade`，并触发全局中止。
+2. 门禁未通过：
+- 分数 `>=63`：`hold_watch`
+- 否则：`no_trade`
+3. 门禁通过后：
+- 分数 `<70` 或 `targetQty < 100`：`hold_watch`
+- 否则：
+  - `pendingBuyQty=0`：`open_buy`
+  - `deltaQty>0`：`increase_buy`
+  - 其他：`replace_buy`

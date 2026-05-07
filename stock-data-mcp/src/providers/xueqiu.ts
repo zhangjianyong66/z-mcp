@@ -9,6 +9,8 @@ import type {
 } from "../types.js";
 
 const XUEQIU_QUOTE_URL = "https://stock.xueqiu.com/v5/stock/realtime/quotec.json";
+const XUEQIU_QUOTE_DETAIL_URL = "https://stock.xueqiu.com/v5/stock/quote.json";
+const XUEQIU_SUGGEST_STOCK_URL = "https://xueqiu.com/query/v1/suggest_stock.json";
 const XUEQIU_KLINE_URL = "https://stock.xueqiu.com/v5/stock/chart/kline.json";
 const XUEQIU_HOME_URL = "https://xueqiu.com/";
 const XUEQIU_COOKIE_TTL_MS = 30 * 60 * 1000;
@@ -26,6 +28,7 @@ type XueqiuAuthErrorDetails = {
 let cachedCookie: string | null = null;
 let cookieFetchedAtMs = 0;
 let fetchImpl: FetchLike = fetch;
+const symbolNameCache = new Map<string, string | null>();
 
 function serializeCookies(cookies: Array<{ name: string; value: string }>): string {
   return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
@@ -104,6 +107,7 @@ let cookieLoader: CookieLoader = loadCookieWithPlaywright;
 export function clearXueqiuCookieCache(): void {
   cachedCookie = null;
   cookieFetchedAtMs = 0;
+  symbolNameCache.clear();
 }
 
 export function setXueqiuCookieLoaderForTests(loader?: CookieLoader): void {
@@ -244,6 +248,103 @@ export function mapXueqiuQuote(data: Record<string, unknown>, symbol: string): E
   };
 }
 
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function extractNameFromQuoteDetail(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+  const data = (payload as { data?: unknown }).data;
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
+  const quote = (data as { quote?: unknown }).quote;
+  if (quote && typeof quote === "object") {
+    const quoteObj = quote as Record<string, unknown>;
+    return (
+      asNonEmptyString(quoteObj.name) ??
+      asNonEmptyString(quoteObj.stock_name) ??
+      asNonEmptyString(quoteObj.display_name)
+    );
+  }
+  const dataObj = data as Record<string, unknown>;
+  return (
+    asNonEmptyString(dataObj.name) ??
+    asNonEmptyString(dataObj.stock_name) ??
+    asNonEmptyString(dataObj.display_name)
+  );
+}
+
+function extractNameFromSuggest(payload: unknown, symbol: string): string | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+  const data = (payload as { data?: unknown }).data;
+  if (!Array.isArray(data)) {
+    return undefined;
+  }
+  const normalized = symbol.toUpperCase();
+  for (const item of data) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const row = item as Record<string, unknown>;
+    const candidateSymbol = asNonEmptyString(row.symbol)?.toUpperCase();
+    if (candidateSymbol && candidateSymbol !== normalized) {
+      continue;
+    }
+    const name =
+      asNonEmptyString(row.name) ??
+      asNonEmptyString(row.stock_name) ??
+      asNonEmptyString(row.label) ??
+      asNonEmptyString(row.display_name);
+    if (name) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+async function fetchEtfNameFromXueqiu(input: NormalizedEtfInput): Promise<string | undefined> {
+  const cacheKey = input.normalizedSymbol.prefixed.toUpperCase();
+  if (symbolNameCache.has(cacheKey)) {
+    const cached = symbolNameCache.get(cacheKey);
+    return cached ?? undefined;
+  }
+
+  const detailPayload = await fetchJson(
+    XUEQIU_QUOTE_DETAIL_URL,
+    {
+      symbol: input.normalizedSymbol.prefixed,
+      extend: "detail"
+    },
+    input.timeoutMs
+  ).catch(() => null);
+  const detailName = extractNameFromQuoteDetail(detailPayload);
+  if (detailName) {
+    symbolNameCache.set(cacheKey, detailName);
+    return detailName;
+  }
+
+  const suggestPayload = await fetchJson(
+    XUEQIU_SUGGEST_STOCK_URL,
+    {
+      q: input.normalizedSymbol.prefixed,
+      count: 10
+    },
+    input.timeoutMs
+  ).catch(() => null);
+  const suggestName = extractNameFromSuggest(suggestPayload, input.normalizedSymbol.prefixed);
+  symbolNameCache.set(cacheKey, suggestName ?? null);
+  return suggestName;
+}
+
 export function parseXueqiuKlines(items: unknown[]): EtfKlinePoint[] {
   return items.map((item) => {
     const row = item as Array<number | null>;
@@ -273,7 +374,16 @@ async function quote(input: NormalizedEtfInput): Promise<EtfQuote> {
     throw new Error("empty quote data");
   }
 
-  return mapXueqiuQuote(data, input.normalizedSymbol.code);
+  const quoteData = mapXueqiuQuote(data, input.normalizedSymbol.code);
+  if (asNonEmptyString(quoteData.name)) {
+    return quoteData;
+  }
+
+  const fallbackName = await fetchEtfNameFromXueqiu(input);
+  return {
+    ...quoteData,
+    ...(fallbackName ? { name: fallbackName } : {})
+  };
 }
 
 async function kline(input: NormalizedEtfKlineInput): Promise<EtfKlinePoint[]> {

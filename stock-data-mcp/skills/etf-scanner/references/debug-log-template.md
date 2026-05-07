@@ -4,12 +4,17 @@
 
 ## 1) Flow (`debug/flow.md`)
 
+- `artifact_root`: `/Users/zhangjianyong/project/z-mcp/stock-data-mcp/skills/etf-scanner/artifacts`
+- `run_dir`:
+- `debug_dir`:
 - `run_id`:
 - `debug_enabled`: true
 - `trigger_keyword`:
 - `start_time`:
 - `end_time`:
 - `final_status`: `success|failed|aborted`
+- `path_consistency`: `ok|mismatch`
+- `path_consistency_note`:
 
 ### Timeline
 
@@ -64,3 +69,4 @@
 - `debug/flow.md`:
 - `debug/tool_calls_debug.json`:
 - `debug/issue.md`:
+- `actual_written_paths`:

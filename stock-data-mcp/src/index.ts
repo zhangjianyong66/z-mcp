@@ -12,6 +12,8 @@ import {
   runEtfQuote,
   runSectorList
 } from "./stock-data.js";
+import { runEtfBatchDecide } from "./etf-batch-decide.js";
+import { getEtfUniverse } from "./etf-universe.js";
 import {
   configureStockDataLogging,
   logStockDataEvent
@@ -190,6 +192,74 @@ server.tool(
     try {
       const result = await runTool("etf_analyze", { symbol, source, days, timeout }, (requestId) =>
         runEtfAnalyze({ symbol, source, days, timeout }, undefined, undefined, { requestId })
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "etf_universe",
+  "获取 MCP 内置 ETF 池（当前 39 只，含代码/名称/主题）。",
+  {},
+  async () => {
+    try {
+      const result = await runTool(
+        "etf_universe",
+        {},
+        async () => {
+          const items = await getEtfUniverse();
+          return {
+            generatedAt: new Date().toISOString(),
+            total: items.length,
+            items
+          };
+        }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "etf_batch_decide",
+  "批量计算 ETF 评分、仓位与动作建议。自动读取账户快照，最多 20 个。",
+  {
+    symbols: z.array(z.string().min(1)).min(1).max(20).describe("List of ETF symbols such as [159930, 510300]."),
+    source: providerSchema.optional().describe("Optional provider. Defaults to xueqiu."),
+    days: z.number().int().min(20).max(180).optional().describe("Optional day count. Defaults to 60."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 20."),
+    riskPct: z.number().positive().max(1).optional().describe("Risk budget percentage. Defaults to 0.01."),
+    singleEtfExposureCapPct: z.number().positive().max(1).optional().describe("Single ETF exposure cap percentage. Defaults to 0.2."),
+    riskRewardModel: z.unknown().optional().describe("Deprecated. Passing this field will return an error.")
+  },
+  async ({ symbols, source, days, timeout, riskPct, singleEtfExposureCapPct, riskRewardModel }) => {
+    try {
+      if (riskRewardModel !== undefined) {
+        throw new Error("riskRewardModel is deprecated and unsupported.");
+      }
+      const result = await runTool(
+        "etf_batch_decide",
+        { symbols, source, days, timeout, riskPct, singleEtfExposureCapPct },
+        () => runEtfBatchDecide({ symbols, source, days, timeout, riskPct, singleEtfExposureCapPct })
       );
       return {
         content: [

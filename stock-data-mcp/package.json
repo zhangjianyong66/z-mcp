@@ -8,12 +8,14 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts",
+    "report:score-calibration": "tsx scripts/score-calibration-report.ts",
     "start": "node dist/index.js",
     "test": "node --import tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.1",
+    "mysql2": "^3.22.3",
     "playwright": "^1.55.0",
     "zod": "^4.3.6"
   },

@@ -116,6 +116,7 @@ export type EtfBatchErrorItem = {
 };
 
 export type EtfBatchErrorCode = "invalid_input" | "timeout" | "upstream_error" | "internal_error";
+export type Trend = "bullish" | "bearish" | "rangebound" | "insufficient_data";
 
 export type EtfBatchQuoteItem = {
   symbol: string;
@@ -162,7 +163,7 @@ export type EtfBatchAnalyzeItem = {
     ma20: number | null;
     high30: number;
     low30: number;
-    trend: string;
+    trend: Trend;
   };
   recentKlines: EtfKlinePoint[];
 };
@@ -190,7 +191,7 @@ export type EtfAnalyzeResponse = {
     ma20: number | null;
     high30: number;
     low30: number;
-    trend: string;
+    trend: Trend;
   };
   recentKlines: EtfKlinePoint[];
 };
@@ -293,4 +294,144 @@ export type SaveOrdersResult = {
   orders: PortfolioOrder[];
   stats: PortfolioOrderStats;
   autoExpiredOrderCount: number;
+};
+
+export type EtfBatchDecideInput = EtfBatchKlineInput & {
+  riskPct?: number;
+  singleEtfExposureCapPct?: number;
+  /**
+   * Deprecated and ignored. etf_batch_decide always uses v2 scoring.
+   */
+  scoreCalibrationVersion?: "v1" | "v2";
+};
+
+export type EtfBatchDecideErrorCode =
+  | "TIMEOUT"
+  | "TIMEOUT_BUDGET_EXHAUSTED"
+  | "UPSTREAM_AUTH"
+  | "UPSTREAM_TEMPORARY"
+  | "INVALID_INPUT"
+  | "INTERNAL_ERROR"
+  | "MISSING_ACCOUNT_SNAPSHOT"
+  | "PARTIAL_BATCH_FAIL"
+  | "MISSING_REQUIRED_FIELD"
+  | "DOWNGRADED_NEWS_SCORE"
+  | "UNIT_MISMATCH"
+  | "UNKNOWN";
+
+export type EtfBatchDecideAction = "open_buy" | "increase_buy" | "replace_buy" | "hold_watch" | "no_trade";
+export type EtfBatchDecideActionReason =
+  | "trend_not_tradeable"
+  | "structure_not_matched"
+  | "insufficient_safety_margin"
+  | "risk_not_definable"
+  | "insufficient_exposure_room"
+  | "single_exposure_limit"
+  | "capital_limit"
+  | "risk_limit"
+  | "unit_mismatch"
+  | "score_below_buy_threshold"
+  | "target_qty_below_lot"
+  | "pending_order_already_sufficient"
+  | "buy_signal_confirmed"
+  | "unknown_reason";
+
+export type EtfBatchDecideStructureReason =
+  | "passed"
+  | "trend_not_tradeable"
+  | "price_above_ma5_and_far_from_ma10"
+  | "unknown";
+
+export type EtfBatchDecideResultItem = {
+  symbol: string;
+  normalizedSymbol: string;
+  name: string;
+  unitCheck: {
+    status: "pass" | "fail";
+    reason: string | null;
+  };
+  exposureMetrics: {
+    positionMarketValue: number;
+    pendingBuyQty: number;
+    currentPriceUsed: number;
+    symbolExposure: number;
+    symbolCap: number;
+    symbolRatio: number;
+    symbolExposureRoom: number;
+    symbolExposureQty: number;
+    dataSourceTimestamp: string;
+  };
+  positioning: {
+    entryPrice: number;
+    stopLoss: number;
+    riskQty: number;
+    capitalQty: number;
+    targetQty: number;
+    deltaQty: number;
+  };
+  scoring: {
+    layerA: {
+      passed: boolean;
+      reasons: string[];
+    };
+    layerB: {
+      technicalPosition: number;
+      riskReward: number;
+      sectorHotness: number;
+    };
+    total: number;
+  };
+  marketState: {
+    trend: Trend;
+    trendZh: string;
+    price: number;
+    ma5: number;
+    ma10: number;
+    ma20: number;
+    high30: number;
+    low30: number;
+    priceVsMa5Pct: number;
+    priceVsMa10Pct: number;
+    safetyMarginPct: number;
+    structurePass: boolean;
+    structureReason: EtfBatchDecideStructureReason;
+    structureReasonZh: string;
+  };
+  action: EtfBatchDecideAction;
+  actionReasons: EtfBatchDecideActionReason[];
+};
+
+export type EtfBatchDecideErrorItem = {
+  symbol?: string;
+  code: EtfBatchDecideErrorCode;
+  message: string;
+  retryable?: boolean;
+  stage?: "analyze" | "quote" | "sector" | "snapshot" | "global";
+  attemptsUsed?: number;
+  elapsedMs?: number;
+  details?: Record<string, unknown>;
+};
+
+export type EtfBatchDecideResponse = {
+  generatedAt: string;
+  runMeta: {
+    source: EtfProvider;
+    days: number;
+    timeout: number;
+    riskPct: number;
+    singleEtfExposureCapPct: number;
+    total: number;
+  };
+  snapshotMeta: {
+    snapshotUpdatedAt: string | null;
+    snapshotAgeMs: number | null;
+  };
+  globalChecks: {
+    status: "ok" | "aborted" | "failed";
+    abortReason?: string;
+    reasonCode?: EtfBatchDecideErrorCode;
+  };
+  results: EtfBatchDecideResultItem[];
+  watchlist: string[];
+  errors: EtfBatchDecideErrorItem[];
 };

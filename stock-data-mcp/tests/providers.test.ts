@@ -121,7 +121,7 @@ test("xueqiu provider retries once after 401 with auto cookie", async () => {
       ok: true,
       status: 200,
       statusText: "OK",
-      json: async () => ({ data: { current: 1.23 } })
+      json: async () => ({ data: { name: "沪深300ETF", current: 1.23 } })
     } as Response;
   });
 
@@ -189,5 +189,143 @@ test("xueqiu provider returns actionable error for env cookie on 401", async () 
       process.env.XUEQIU_COOKIE = previous;
     }
     setXueqiuFetchForTests();
+  }
+});
+
+test("xueqiu provider does not call fallback name endpoint when quote already has name", async () => {
+  const previous = process.env.XUEQIU_COOKIE;
+  process.env.XUEQIU_COOKIE = "xq_a_token=env_cookie";
+  clearXueqiuCookieCache();
+
+  const seenUrls: string[] = [];
+  setXueqiuFetchForTests(async (url) => {
+    seenUrls.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ data: { name: "沪深300ETF", current: 1.23 } })
+    } as Response;
+  });
+
+  try {
+    const provider = createXueqiuProvider();
+    const quote = await provider.quote({
+      symbol: "510300",
+      provider: "xueqiu",
+      timeoutMs: 10_000,
+      normalizedSymbol: { code: "510300", market: "SH", prefixed: "SH510300", secid: "1.510300" }
+    });
+    assert.equal(quote.name, "沪深300ETF");
+    assert.equal(seenUrls.length, 1);
+    assert.match(seenUrls[0]!, /\/v5\/stock\/realtime\/quotec\.json/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.XUEQIU_COOKIE;
+    } else {
+      process.env.XUEQIU_COOKIE = previous;
+    }
+    setXueqiuFetchForTests();
+    clearXueqiuCookieCache();
+  }
+});
+
+test("xueqiu provider fills name from quote detail fallback when realtime quote has no name", async () => {
+  const previous = process.env.XUEQIU_COOKIE;
+  process.env.XUEQIU_COOKIE = "xq_a_token=env_cookie";
+  clearXueqiuCookieCache();
+
+  setXueqiuFetchForTests(async (url) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes("/v5/stock/realtime/quotec.json")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ data: { current: 1.23 } })
+      } as Response;
+    }
+    if (requestUrl.includes("/v5/stock/quote.json")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ data: { quote: { name: "豆粕ETF" } } })
+      } as Response;
+    }
+    throw new Error(`unexpected url: ${requestUrl}`);
+  });
+
+  try {
+    const provider = createXueqiuProvider();
+    const quote = await provider.quote({
+      symbol: "159985",
+      provider: "xueqiu",
+      timeoutMs: 10_000,
+      normalizedSymbol: { code: "159985", market: "SZ", prefixed: "SZ159985", secid: "0.159985" }
+    });
+    assert.equal(quote.name, "豆粕ETF");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.XUEQIU_COOKIE;
+    } else {
+      process.env.XUEQIU_COOKIE = previous;
+    }
+    setXueqiuFetchForTests();
+    clearXueqiuCookieCache();
+  }
+});
+
+test("xueqiu provider falls back to suggest endpoint when detail endpoint does not provide name", async () => {
+  const previous = process.env.XUEQIU_COOKIE;
+  process.env.XUEQIU_COOKIE = "xq_a_token=env_cookie";
+  clearXueqiuCookieCache();
+
+  setXueqiuFetchForTests(async (url) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes("/v5/stock/realtime/quotec.json")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ data: { current: 1.23 } })
+      } as Response;
+    }
+    if (requestUrl.includes("/v5/stock/quote.json")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ data: { quote: {} } })
+      } as Response;
+    }
+    if (requestUrl.includes("/query/v1/suggest_stock.json")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ data: [{ symbol: "SZ159985", name: "豆粕ETF" }] })
+      } as Response;
+    }
+    throw new Error(`unexpected url: ${requestUrl}`);
+  });
+
+  try {
+    const provider = createXueqiuProvider();
+    const quote = await provider.quote({
+      symbol: "159985",
+      provider: "xueqiu",
+      timeoutMs: 10_000,
+      normalizedSymbol: { code: "159985", market: "SZ", prefixed: "SZ159985", secid: "0.159985" }
+    });
+    assert.equal(quote.name, "豆粕ETF");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.XUEQIU_COOKIE;
+    } else {
+      process.env.XUEQIU_COOKIE = previous;
+    }
+    setXueqiuFetchForTests();
+    clearXueqiuCookieCache();
   }
 });
