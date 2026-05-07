@@ -1,0 +1,37 @@
+{
+  "server": "stock-data",
+  "tool": "etf_batch_quote",
+  "input": {
+    "symbols": [
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300",
+      "510300"
+    ],
+    "timeout": 120
+  },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"source\":\"xueqiu\",\"generatedAt\":\"2026-05-04T17:39:11.673Z\",\"total\":20,\"successCount\":20,\"errorCount\":0,\"results\":[{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}},{\"symbol\":\"510300\",\"normalizedSymbol\":\"SH510300\",\"data\":{\"symbol\":\"510300\",\"price\":4.824,\"changePercent\":0.06,\"changeAmount\":0.003,\"open\":4.83,\"high\":4.841,\"low\":4.808,\"prevClose\":4.821,\"volume\":1651786402,\"amount\":7965711080,\"turnoverRate\":null}}]}"
+      }
+    ]
+  }
+}
