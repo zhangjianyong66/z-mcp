@@ -10,7 +10,26 @@ test("loadConfigFromEnv requires host user and database", () => {
   );
 });
 
-test("loadConfigFromEnv applies defaults and parses values", () => {
+test("loadConfigFromEnv applies defaults", () => {
+  const config = loadConfigFromEnv({
+    MYSQL_HOST: "127.0.0.1",
+    MYSQL_USER: "reader",
+    MYSQL_DATABASE: "app"
+  });
+
+  assert.deepEqual(config, {
+    host: "127.0.0.1",
+    port: 3306,
+    user: "reader",
+    password: "",
+    database: "app",
+    ssl: false,
+    queryTimeoutMs: 30000,
+    maxRows: 500
+  });
+});
+
+test("loadConfigFromEnv parses optional values", () => {
   const config = loadConfigFromEnv({
     MYSQL_HOST: "127.0.0.1",
     MYSQL_USER: "reader",
