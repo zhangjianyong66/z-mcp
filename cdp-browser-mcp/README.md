@@ -17,17 +17,27 @@ A generic MCP server for controlling an already running Chrome via CDP.
 
 ## Prerequisites
 
-Chrome must run with remote debugging enabled:
+Install Google Chrome or Chromium. The `start_chrome_cdp` tool can start a
+local headed browser with remote debugging enabled on macOS and Ubuntu/Linux.
+
+You can also start it manually:
 
 ```bash
+# macOS
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.chrome-cdp"
+
+# Ubuntu/Linux
+google-chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.chrome-cdp"
 ```
 
 ## Install
 
 ```bash
-cd /Users/zhangjianyong/project/z-mcp/cdp-browser-mcp
+cd /home/zhangjianyong/project/z-mcp/cdp-browser-mcp
 npm install
 npm run build
 ```
@@ -38,6 +48,23 @@ npm run build
 CDP_ENDPOINT=http://127.0.0.1:9222 npm start
 ```
 
+## Browser startup
+
+The bundled startup script auto-detects these browser commands/paths:
+
+- macOS: Google Chrome, Chromium
+- Ubuntu/Linux: `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`
+
+Override detection when needed:
+
+```bash
+CHROME_BIN=/path/to/chrome ./scripts/start-chrome-cdp.sh
+```
+
+If Chrome/Chromium is already running but `http://127.0.0.1:9222` is not
+reachable, the script exits conservatively. Quit the running browser and rerun,
+or relaunch it manually with `--remote-debugging-port=9222`.
+
 ## OpenClaw MCP config example
 
 ```json
@@ -45,9 +72,9 @@ CDP_ENDPOINT=http://127.0.0.1:9222 npm start
   "mcp": {
     "servers": {
       "cdp-browser": {
-        "command": "/Users/zhangjianyong/.nvm/versions/node/v22.22.1/bin/node",
+        "command": "/home/zhangjianyong/.nvm/versions/node/v22.22.0/bin/node",
         "args": [
-          "/Users/zhangjianyong/project/z-mcp/cdp-browser-mcp/dist/index.js"
+          "/home/zhangjianyong/project/z-mcp/cdp-browser-mcp/dist/index.js"
         ],
         "env": {
           "CDP_ENDPOINT": "http://127.0.0.1:9222",

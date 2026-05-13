@@ -1,3 +1,16 @@
 minimax-music-mcp/dist/
 mysql-mcp/dist/
 mysql-mcp/node_modules/
+
+# Common generated and local process artifacts
+node_modules/
+dist/
+coverage/
+.cache/
+.tmp/
+tmp/
+logs/
+*.log
+.env
+.env.*
+!.env.example

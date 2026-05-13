@@ -256,7 +256,7 @@ server.tool(
       };
 
       const result = await new Promise<{ stdout: string; stderr: string }>((resolvePromise, rejectPromise) => {
-        execFile("/bin/zsh", [START_CHROME_SCRIPT], { env, timeout: 45000 }, (error, stdout, stderr) => {
+        execFile(START_CHROME_SCRIPT, [], { env, timeout: 45000 }, (error, stdout, stderr) => {
           if (error) {
             rejectPromise(
               new Error(
