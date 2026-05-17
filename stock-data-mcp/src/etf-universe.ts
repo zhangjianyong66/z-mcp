@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { getDbPool } from "./db.js";
+import { withDbRetry } from "./db.js";
 
 export type EtfUniverseItem = {
   symbol: string;
@@ -18,9 +18,10 @@ function normalizeSymbol(symbol: string): string {
 }
 
 export async function getEtfUniverse(): Promise<EtfUniverseItem[]> {
-  const pool = getDbPool();
-  const [rows] = await pool.query<UniverseRow[]>(
-    "SELECT symbol, name, theme FROM etf_universe ORDER BY symbol ASC"
+  const [rows] = await withDbRetry((pool) =>
+    pool.query<UniverseRow[]>(
+      "SELECT symbol, name, theme FROM etf_universe ORDER BY symbol ASC"
+    )
   );
 
   return rows.map((item) => ({
@@ -32,10 +33,11 @@ export async function getEtfUniverse(): Promise<EtfUniverseItem[]> {
 
 export async function getEtfUniverseItem(symbol: string): Promise<EtfUniverseItem | undefined> {
   const normalized = normalizeSymbol(symbol);
-  const pool = getDbPool();
-  const [rows] = await pool.query<UniverseRow[]>(
-    "SELECT symbol, name, theme FROM etf_universe WHERE REPLACE(REPLACE(UPPER(symbol), 'SH', ''), 'SZ', '') = ? LIMIT 1",
-    [normalized]
+  const [rows] = await withDbRetry((pool) =>
+    pool.query<UniverseRow[]>(
+      "SELECT symbol, name, theme FROM etf_universe WHERE REPLACE(REPLACE(UPPER(symbol), 'SH', ''), 'SZ', '') = ? LIMIT 1",
+      [normalized]
+    )
   );
 
   if (rows.length === 0) {

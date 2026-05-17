@@ -20,10 +20,21 @@
 - `symbolRatio`
 - `symbolExposureRoom`
 - `symbolExposureQty`
+- `theme`
+- `themeExposure`
+- `themeCap`
+- `themeRatio`
+- `themeExposureRoom`
+- `themeExposureQty`
 - `action`
 - `actionReasons`
 - `unitCheck.status`
 - `unitCheck.reason`
+
+数量语义（执行边界）：
+- `targetQty/deltaQty` 是 MCP 在约束下给出的最大可交易股数上限，不是必须全量下单股数。
+- 上限已包含单 ETF 上限与主题集中度上限。
+- 实际下单股数由执行层按实时交易条件裁剪，裁剪后不得超过该上限。
 
 ## 动作字典
 

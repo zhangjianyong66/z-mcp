@@ -3,6 +3,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
+  buildHotMiningPipeline,
+  normalizeChineseHotTrendsArgs,
+  normalizeHotMiningPipelineArgs,
+  runChineseHotTrends
+} from "./chinese-hot-trends.js";
+import {
   normalizeFinanceHotnewsArgs,
   runFinanceHotnews
 } from "./finance-hotnews.js";
@@ -76,6 +82,80 @@ server.tool(
         search_fallback
       });
       const response = await runFinanceHotnews(input);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "chinese_hot_trends",
+  "聚合中文互联网公开热点榜单，优先使用百度热搜、知乎热搜和 B 站热门。可选搜索验证，返回结构化 JSON。",
+  {
+    sources: z
+      .array(z.enum(["baidu", "zhihu", "bilibili", "weibo"]))
+      .optional()
+      .describe("Optional public hot-list sources. Defaults to baidu, zhihu and bilibili."),
+    limit: z.number().int().min(1).max(50).optional().describe("Optional max trend count. Defaults to 20."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 30."),
+    verify_with_search: z.boolean().optional().describe("Whether to verify each trend with search results. Defaults to false.")
+  },
+  async ({ sources, limit, timeout, verify_with_search }) => {
+    try {
+      const input = normalizeChineseHotTrendsArgs({
+        sources,
+        limit,
+        timeout,
+        verify_with_search
+      });
+      const response = await runChineseHotTrends(input);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return toToolError(error);
+    }
+  }
+);
+
+server.tool(
+  "hot_mining_pipeline",
+  "执行中文热门信息挖掘流水线：热点发现、搜索验证、财经行业补充和长尾技术趋势补充。返回结构化 JSON。",
+  {
+    sources: z
+      .array(z.enum(["baidu", "zhihu", "bilibili", "weibo"]))
+      .optional()
+      .describe("Optional discovery hot-list sources. Defaults to baidu, zhihu and bilibili."),
+    limit: z.number().int().min(1).max(50).optional().describe("Optional max discovery trend count. Defaults to 20."),
+    timeout: z.number().int().min(1).max(120).optional().describe("Optional timeout in seconds. Defaults to 30."),
+    include_industry: z.boolean().optional().describe("Whether to include finance_hotnews industry supplement. Defaults to true."),
+    include_long_tail: z.boolean().optional().describe("Whether to include long-tail developer trend search. Defaults to true.")
+  },
+  async ({ sources, limit, timeout, include_industry, include_long_tail }) => {
+    try {
+      const input = normalizeHotMiningPipelineArgs({
+        sources,
+        limit,
+        timeout,
+        include_industry,
+        include_long_tail
+      });
+      const response = await buildHotMiningPipeline(input);
 
       return {
         content: [

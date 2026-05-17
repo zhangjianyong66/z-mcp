@@ -6,7 +6,7 @@ import type {
   SaveOrdersResult,
   SavePortfolioResult
 } from "./types.js";
-import { getDbPool } from "./db.js";
+import { withDbRetry, withDbTransaction } from "./db.js";
 
 const SHANGHAI_TIMEZONE = "Asia/Shanghai";
 const MARKET_VALUE_TOLERANCE = 0.01;
@@ -126,9 +126,10 @@ function buildPortfolioWarnings(positions: PortfolioPosition[]): string[] {
 }
 
 async function loadOrders(): Promise<PortfolioOrder[]> {
-  const pool = getDbPool();
-  const [rows] = await pool.query<OrderRow[]>(
-    "SELECT id, order_id, symbol, name, side, quantity, order_time, status FROM etf_orders ORDER BY id ASC"
+  const [rows] = await withDbRetry((pool) =>
+    pool.query<OrderRow[]>(
+      "SELECT id, order_id, symbol, name, side, quantity, order_time, status FROM etf_orders ORDER BY id ASC"
+    )
   );
 
   return rows.map((row) => ({
@@ -143,11 +144,7 @@ async function loadOrders(): Promise<PortfolioOrder[]> {
 }
 
 async function overwriteOrders(orders: PortfolioOrder[]): Promise<void> {
-  const pool = getDbPool();
-  const conn = await pool.getConnection();
-
-  try {
-    await conn.beginTransaction();
+  await withDbTransaction(async (conn) => {
     await conn.query("DELETE FROM etf_orders");
 
     if (orders.length > 0) {
@@ -166,13 +163,7 @@ async function overwriteOrders(orders: PortfolioOrder[]): Promise<void> {
       );
     }
 
-    await conn.commit();
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
-  }
+  });
 }
 
 export async function savePortfolio(input: {
@@ -181,13 +172,9 @@ export async function savePortfolio(input: {
   positions: PortfolioPosition[];
   updatedAt?: string;
 }, now: Date = new Date()): Promise<SavePortfolioResult> {
-  const pool = getDbPool();
-  const conn = await pool.getConnection();
   const updatedAt = input.updatedAt ?? now.toISOString();
 
-  try {
-    await conn.beginTransaction();
-
+  return withDbTransaction(async (conn) => {
     const [ordersRows] = await conn.query<OrderRow[]>(
       "SELECT id, order_id, symbol, name, side, quantity, order_time, status FROM etf_orders ORDER BY id ASC"
     );
@@ -248,8 +235,6 @@ export async function savePortfolio(input: {
       );
     }
 
-    await conn.commit();
-
     const nextPortfolio = {
       totalCapital: input.totalCapital,
       availableCapital: input.availableCapital,
@@ -262,12 +247,7 @@ export async function savePortfolio(input: {
       warnings: buildPortfolioWarnings(nextPortfolio.positions),
       autoExpiredOrderCount: expiredApplied.expiredCount
     };
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
-  }
+  });
 }
 
 export async function saveOrders(orders: PortfolioOrder[], now: Date = new Date()): Promise<SaveOrdersResult> {
@@ -282,10 +262,10 @@ export async function saveOrders(orders: PortfolioOrder[], now: Date = new Date(
 }
 
 export async function getPortfolioAndOrders(now: Date = new Date()): Promise<PortfolioSnapshot> {
-  const pool = getDbPool();
-
-  const [portfolioRows] = await pool.query<PortfolioRow[]>(
-    "SELECT id, total_capital, available_capital, updated_at FROM etf_portfolios ORDER BY id DESC LIMIT 1"
+  const [portfolioRows] = await withDbRetry((pool) =>
+    pool.query<PortfolioRow[]>(
+      "SELECT id, total_capital, available_capital, updated_at FROM etf_portfolios ORDER BY id DESC LIMIT 1"
+    )
   );
   const orders = await loadOrders();
 
@@ -306,9 +286,11 @@ export async function getPortfolioAndOrders(now: Date = new Date()): Promise<Por
   }
 
   const latestPortfolio = portfolioRows[0];
-  const [positionRows] = await pool.query<PositionRow[]>(
-    "SELECT symbol, name, quantity, cost_price, current_price, market_value FROM etf_positions WHERE portfolio_id = ? ORDER BY id ASC",
-    [latestPortfolio.id]
+  const [positionRows] = await withDbRetry((pool) =>
+    pool.query<PositionRow[]>(
+      "SELECT symbol, name, quantity, cost_price, current_price, market_value FROM etf_positions WHERE portfolio_id = ? ORDER BY id ASC",
+      [latestPortfolio.id]
+    )
   );
 
   return {

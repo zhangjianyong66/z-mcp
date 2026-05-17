@@ -7,6 +7,7 @@ import {
   calculateNewsScores,
   fetchFinanceNewsTitles
 } from "./sector-hotness.js";
+import { saveHotSectorsSnapshot } from "./sector-store.js";
 import {
   normalizeEtfBatchInput,
   normalizeEtfBatchKlineInput,
@@ -558,6 +559,7 @@ function sortSectorItems(items: SectorListItem[], sortBy: NonNullable<SectorList
 export type SectorListDependencies = {
   provider?: SectorProviderApi;
   newsFetcher?: (timeoutMs: number) => Promise<string[]>;
+  hotSnapshotSaver?: (input: SectorListResponse) => Promise<unknown>;
 };
 
 export async function runSectorList(
@@ -569,6 +571,7 @@ export async function runSectorList(
   const normalized = normalizeSectorListInput(input);
   const provider = dependencies.provider ?? createAkshareProvider();
   const newsFetcher = dependencies.newsFetcher ?? fetchFinanceNewsTitles;
+  const hotSnapshotSaver = dependencies.hotSnapshotSaver ?? saveHotSectorsSnapshot;
 
   logStockDataEvent("sector_list.start", {
     requestId: context?.requestId,
@@ -614,17 +617,22 @@ export async function runSectorList(
     };
   });
 
-  const sorted = sortSectorItems(computed, normalized.sortBy);
-  const total = sorted.length;
-
   const response: SectorListResponse = {
     source: "akshare_ths",
     generatedAt: buildGeneratedAt(now),
     sortBy: normalized.sortBy,
-    total,
+    total: computed.length,
     newsScoreDegraded,
-    data: sorted
+    data: sortSectorItems(computed, normalized.sortBy)
   };
+
+  const hotResponse: SectorListResponse = {
+    ...response,
+    sortBy: "hot",
+    data: sortSectorItems(computed, "hot")
+  };
+
+  await hotSnapshotSaver(hotResponse);
 
   logStockDataEvent("sector_list.success", {
     requestId: context?.requestId,

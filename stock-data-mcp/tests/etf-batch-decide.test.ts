@@ -445,6 +445,75 @@ test("runEtfBatchDecide uses mapped sector hot score when available", async () =
   assert.equal(response.results[0]!.scoring.layerB.sectorHotness, 20);
 });
 
+test("runEtfBatchDecide enforces theme exposure cap by score order", async () => {
+  const multiAnalyze: EtfBatchAnalyzeResponse = {
+    ...analyzeOk,
+    total: 3,
+    successCount: 3,
+    results: [
+      {
+        ...analyzeOk.results[0]!,
+        symbol: "159985",
+        normalizedSymbol: "SZ159985",
+        quote: { ...analyzeOk.results[0]!.quote, symbol: "159985", name: "豆粕ETF", price: 1.0 },
+        indicators: { ...analyzeOk.results[0]!.indicators, current: 1.0, ma5: 1.0, ma10: 0.99, ma20: 0.98, high30: 1.9, low30: 0.8 }
+      },
+      {
+        ...analyzeOk.results[0]!,
+        symbol: "159825",
+        normalizedSymbol: "SZ159825",
+        quote: { ...analyzeOk.results[0]!.quote, symbol: "159825", name: "农业ETF", price: 1.0 },
+        indicators: { ...analyzeOk.results[0]!.indicators, current: 1.0, ma5: 1.0, ma10: 0.99, ma20: 0.98, high30: 1.8, low30: 0.8 }
+      },
+      {
+        ...analyzeOk.results[0]!,
+        symbol: "159865",
+        normalizedSymbol: "SZ159865",
+        quote: { ...analyzeOk.results[0]!.quote, symbol: "159865", name: "养殖ETF", price: 1.0 },
+        indicators: { ...analyzeOk.results[0]!.indicators, current: 1.0, ma5: 1.0, ma10: 0.99, ma20: 0.98, high30: 1.7, low30: 0.8 }
+      }
+    ]
+  };
+
+  const response = await runEtfBatchDecide(
+    { symbols: ["159985", "159825", "159865"], riskPct: 0.2, singleEtfExposureCapPct: 0.8, themeExposureCapPct: 0.2 },
+    {
+      batchAnalyze: async () => multiAnalyze,
+      batchQuote: async () => ({
+        source: "xueqiu",
+        generatedAt: "",
+        total: 3,
+        successCount: 3,
+        errorCount: 0,
+        results: multiAnalyze.results.map((r) => ({ symbol: r.symbol, normalizedSymbol: r.normalizedSymbol, data: r.quote })),
+        errors: []
+      }),
+      sectorList: async () => sectorsOk,
+      portfolioSnapshot: async () => ({
+        ...snapshotOk,
+        portfolio: {
+          ...snapshotOk.portfolio!,
+          totalCapital: 1200,
+          availableCapital: 1200,
+          positions: []
+        },
+        orders: []
+      }),
+      etfUniverse: async () => ([
+        { symbol: "159985", name: "豆粕ETF", theme: "农产品链" },
+        { symbol: "159825", name: "农业ETF", theme: "农产品链" },
+        { symbol: "159865", name: "养殖ETF", theme: "农产品链" }
+      ])
+    },
+    () => new Date("2026-05-05T08:03:00.000Z")
+  );
+
+  assert.equal(response.globalChecks.status, "ok");
+  const blocked = response.results.filter((item) => item.actionReasons.includes("theme_exposure_limit"));
+  assert.ok(blocked.length >= 1);
+  assert.equal(response.runMeta.themeExposureCapPct, 0.2);
+});
+
 test("runEtfBatchDecide uses 63 threshold when layerA fails", async () => {
   const bearishHighScore: EtfBatchAnalyzeResponse = {
     ...analyzeOk,

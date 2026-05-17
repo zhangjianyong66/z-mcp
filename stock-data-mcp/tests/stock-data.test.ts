@@ -313,6 +313,7 @@ function createSectorItem(overrides: Partial<SectorSnapshotItem> = {}): SectorSn
 }
 
 test("runSectorList sorts by gainers and returns all data", async () => {
+  const saves: string[] = [];
   const provider: SectorProviderApi = {
     listIndustrySummary: async () => [
       createSectorItem({ sectorName: "医药", changePercent: -1.2 }),
@@ -325,7 +326,10 @@ test("runSectorList sorts by gainers and returns all data", async () => {
     { sortBy: "gainers" },
     {
       provider,
-      newsFetcher: async () => ["白酒板块领涨", "军工板块活跃"]
+      newsFetcher: async () => ["白酒板块领涨", "军工板块活跃"],
+      hotSnapshotSaver: async (snapshot) => {
+        saves.push(snapshot.sortBy);
+      }
     },
     () => new Date("2026-04-23T12:00:00.000Z")
   );
@@ -336,6 +340,7 @@ test("runSectorList sorts by gainers and returns all data", async () => {
   assert.equal(response.data.length, 3);
   assert.equal(response.data[0]?.sectorName, "白酒");
   assert.equal(response.data[1]?.sectorName, "军工");
+  assert.deepEqual(saves, ["hot"]);
 });
 
 test("runSectorList supports losers sorting", async () => {
@@ -351,7 +356,8 @@ test("runSectorList supports losers sorting", async () => {
     { sortBy: "losers" },
     {
       provider,
-      newsFetcher: async () => []
+      newsFetcher: async () => [],
+      hotSnapshotSaver: async () => {}
     }
   );
 
@@ -371,7 +377,8 @@ test("runSectorList calculates hot score with news and market components", async
     { sortBy: "hot" },
     {
       provider,
-      newsFetcher: async () => ["白酒持续活跃", "白酒消费回暖", "半导体芯片反弹"]
+      newsFetcher: async () => ["白酒持续活跃", "白酒消费回暖", "半导体芯片反弹"],
+      hotSnapshotSaver: async () => {}
     }
   );
 
@@ -396,7 +403,8 @@ test("runSectorList degrades news score when news fetch fails", async () => {
       provider,
       newsFetcher: async () => {
         throw new Error("news source timeout");
-      }
+      },
+      hotSnapshotSaver: async () => {}
     }
   );
 
@@ -423,7 +431,8 @@ test("runSectorList retries transient sector provider errors and succeeds", asyn
     { sortBy: "gainers" },
     {
       provider,
-      newsFetcher: async () => []
+      newsFetcher: async () => [],
+      hotSnapshotSaver: async () => {}
     }
   );
 
@@ -445,7 +454,8 @@ test("runSectorList fails after max retries on transient sector provider errors"
     { sortBy: "gainers" },
     {
       provider,
-      newsFetcher: async () => []
+      newsFetcher: async () => [],
+      hotSnapshotSaver: async () => {}
     }
   ).then(
     () => null,
@@ -459,4 +469,27 @@ test("runSectorList fails after max retries on transient sector provider errors"
   assert.equal(details?.timeoutMs, 60_000);
   assert.equal(typeof details?.elapsedMs, "number");
   assert.equal(attempts, 3);
+});
+
+test("runSectorList persists hot snapshot even when caller requests gainers", async () => {
+  const saved: string[] = [];
+  const provider: SectorProviderApi = {
+    listIndustrySummary: async () => [
+      createSectorItem({ sectorName: "白酒", changePercent: 3.4 }),
+      createSectorItem({ sectorName: "军工", changePercent: 1.1 })
+    ]
+  };
+
+  await runSectorList(
+    { sortBy: "gainers" },
+    {
+      provider,
+      newsFetcher: async () => [],
+      hotSnapshotSaver: async (snapshot) => {
+        saved.push(snapshot.sortBy);
+      }
+    }
+  );
+
+  assert.deepEqual(saved, ["hot"]);
 });

@@ -1,6 +1,7 @@
 import { getPortfolioAndOrders } from "./portfolio-store.js";
 import { runEtfBatchAnalyze, runEtfBatchQuote, runSectorList } from "./stock-data.js";
 import { resolveSectorHotScore } from "./etf-sector-mapping.js";
+import { getEtfUniverse } from "./etf-universe.js";
 import { logStockDataEvent } from "./logging.js";
 import type {
   EtfBatchDecideAction,
@@ -19,6 +20,7 @@ const DEFAULT_DAYS = 60;
 const DEFAULT_TIMEOUT = 20;
 const DEFAULT_RISK_PCT = 0.01;
 const DEFAULT_SINGLE_CAP_PCT = 0.2;
+const DEFAULT_THEME_CAP_PCT = 0.2;
 const FIXED_SCORE_CALIBRATION_VERSION = "v2";
 const LOT_SIZE = 100;
 const RETRY_MAX_ATTEMPTS = 3;
@@ -31,6 +33,7 @@ type DecideDeps = {
   batchQuote?: typeof runEtfBatchQuote;
   sectorList?: typeof runSectorList;
   portfolioSnapshot?: typeof getPortfolioAndOrders;
+  etfUniverse?: typeof getEtfUniverse;
 };
 
 function normalizeSymbol(symbol: string): string {
@@ -50,6 +53,11 @@ function floorLot(quantity: number): number {
     return 0;
   }
   return Math.floor(quantity / LOT_SIZE) * LOT_SIZE;
+}
+
+function normalizeTheme(theme: string | null | undefined): string {
+  const text = typeof theme === "string" ? theme.trim() : "";
+  return text.length > 0 ? text : "unknown";
 }
 
 function buildError(code: EtfBatchDecideErrorCode, message: string, symbol?: string) {
@@ -422,11 +430,13 @@ function pickConstraintReasons(params: {
   riskQty: number;
   capitalQty: number;
   symbolExposureQty: number;
+  themeExposureQty: number;
 }): EtfBatchDecideActionReason[] {
   const reasons: EtfBatchDecideActionReason[] = [];
   if (params.unitFailed) reasons.push("unit_mismatch");
   if (params.targetQty <= 0) {
     if (params.symbolExposureQty <= 0) reasons.push("single_exposure_limit");
+    if (params.themeExposureQty <= 0) reasons.push("theme_exposure_limit");
     if (params.capitalQty <= 0) reasons.push("capital_limit");
     if (params.riskQty <= 0) reasons.push("risk_limit");
   }
@@ -445,13 +455,15 @@ function collectActionReasons(params: {
   riskQty: number;
   capitalQty: number;
   symbolExposureQty: number;
+  themeExposureQty: number;
 }): EtfBatchDecideActionReason[] {
   const constraintReasons = pickConstraintReasons({
     unitFailed: params.unitFailed,
     targetQty: params.targetQty,
     riskQty: params.riskQty,
     capitalQty: params.capitalQty,
-    symbolExposureQty: params.symbolExposureQty
+    symbolExposureQty: params.symbolExposureQty,
+    themeExposureQty: params.themeExposureQty
   });
   const reasonSet = new Set<EtfBatchDecideActionReason>();
   const map: Record<string, EtfBatchDecideActionReason> = {
@@ -494,6 +506,7 @@ function collectActionReasons(params: {
     "risk_not_definable",
     "insufficient_exposure_room",
     "single_exposure_limit",
+    "theme_exposure_limit",
     "capital_limit",
     "risk_limit",
     "score_below_buy_threshold",
@@ -575,6 +588,7 @@ export async function runEtfBatchDecide(
   const timeout = input.timeout ?? DEFAULT_TIMEOUT;
   const riskPct = input.riskPct ?? DEFAULT_RISK_PCT;
   const singleEtfExposureCapPct = input.singleEtfExposureCapPct ?? DEFAULT_SINGLE_CAP_PCT;
+  const themeExposureCapPct = input.themeExposureCapPct ?? DEFAULT_THEME_CAP_PCT;
   const scoreCalibrationVersion = FIXED_SCORE_CALIBRATION_VERSION;
   const useBalancedModel = scoreCalibrationVersion === "v2";
 
@@ -582,13 +596,14 @@ export async function runEtfBatchDecide(
   const batchQuote = deps.batchQuote ?? runEtfBatchQuote;
   const sectorList = deps.sectorList ?? runSectorList;
   const portfolioSnapshot = deps.portfolioSnapshot ?? getPortfolioAndOrders;
+  const etfUniverse = deps.etfUniverse ?? getEtfUniverse;
   const generatedAt = now().toISOString();
   const startedAtMs = Date.now();
   const timeoutMs = Math.max(1_000, Math.floor(timeout * 1000));
   const errors: EtfBatchDecideResponse["errors"] = [];
   const baseResponse = {
     generatedAt,
-    runMeta: { source, days, timeout, riskPct, singleEtfExposureCapPct, total: input.symbols.length }
+    runMeta: { source, days, timeout, riskPct, singleEtfExposureCapPct, themeExposureCapPct, total: input.symbols.length }
   };
   const failResponse = (error: EtfBatchDecideErrorItem): EtfBatchDecideResponse => ({
     ...baseResponse,
@@ -726,7 +741,89 @@ export async function runEtfBatchDecide(
     };
   }
 
-  const resultItems: EtfBatchDecideResponse["results"] = [];
+  const themeBySymbol = new Map<string, string>();
+  try {
+    const universe = await etfUniverse();
+    for (const item of universe) {
+      themeBySymbol.set(normalizeSymbol(item.symbol), normalizeTheme(item.theme));
+    }
+  } catch (error) {
+    logStockDataEvent("etf_batch_decide.theme_universe_unavailable", {
+      error: error instanceof Error ? error.message : String(error)
+    }, "warning");
+  }
+
+  const themeExposureState = new Map<string, { cap: number; exposure: number; room: number }>();
+  const totalCapital = snapshot.portfolio.totalCapital;
+  const themeCap = totalCapital * themeExposureCapPct;
+  for (const symbol of input.symbols.map(normalizeSymbol)) {
+    const theme = themeBySymbol.get(symbol) ?? "unknown";
+    if (themeExposureState.has(theme)) continue;
+    let exposure = 0;
+    for (const position of snapshot.portfolio.positions) {
+      const positionSymbol = normalizeSymbol(position.symbol);
+      if ((themeBySymbol.get(positionSymbol) ?? "unknown") === theme) {
+        exposure += position.marketValue;
+      }
+    }
+    for (const order of snapshot.orders) {
+      if (order.status !== "pending" || order.side !== "buy") continue;
+      const orderSymbol = normalizeSymbol(order.symbol);
+      if ((themeBySymbol.get(orderSymbol) ?? "unknown") !== theme) continue;
+      const p = quoteMap.get(orderSymbol)?.data?.price ?? analyzeMap.get(orderSymbol)?.quote?.price;
+      if (typeof p === "number" && Number.isFinite(p) && p > 0) {
+        exposure += order.quantity * p;
+      }
+    }
+    const room = Math.max(0, themeCap - exposure);
+    themeExposureState.set(theme, { cap: themeCap, exposure, room });
+  }
+
+  const pendingItems: Array<{
+    symbol: string;
+    normalizedSymbol: string;
+    name: string;
+    unitFailure: string | null;
+    trend: Trend;
+    price: number;
+    ma5: number;
+    ma10: number;
+    ma20: number;
+    high30: number;
+    low30: number;
+    structurePass: boolean;
+    structureReason: "passed" | "trend_not_tradeable" | "price_above_ma5_and_far_from_ma10" | "unknown";
+    layerAReasons: string[];
+    passedLayerA: boolean;
+    technicalScore: number;
+    riskReward: number;
+    sectorScore: number;
+    totalScore: number;
+    positionMarketValue: number;
+    pendingBuyQty: number;
+    symbolExposure: number;
+    symbolCap: number;
+    symbolRatio: number;
+    symbolExposureRoom: number;
+    symbolExposureQty: number;
+    entryPrice: number;
+    stopLoss: number;
+    riskQty: number;
+    capitalQty: number;
+    theme: string;
+    themeCap: number;
+    themeExposure: number;
+    themeRatio: number;
+    themeExposureRoom: number;
+    themeExposureQty: number;
+    targetQty: number;
+    deltaQty: number;
+    action: EtfBatchDecideAction;
+    actionReasons: EtfBatchDecideActionReason[];
+    priceVsMa5Pct: number;
+    priceVsMa10Pct: number;
+    safetyMargin: number;
+  }> = [];
   let unitMismatchFound = false;
 
   for (const symbol of input.symbols.map(normalizeSymbol)) {
@@ -760,7 +857,7 @@ export async function runEtfBatchDecide(
 
     const positionQty = position?.quantity ?? 0;
     const positionMarketValue = position?.marketValue ?? 0;
-    const symbolCap = snapshot.portfolio.totalCapital * singleEtfExposureCapPct;
+    const symbolCap = totalCapital * singleEtfExposureCapPct;
     const symbolExposure = positionMarketValue + pendingBuyQty * price;
     const symbolRatio = symbolCap > 0 ? symbolExposure / symbolCap : 0;
 
@@ -781,9 +878,6 @@ export async function runEtfBatchDecide(
     const capitalQty = entryPrice > 0 ? floorLot(snapshot.portfolio.availableCapital / entryPrice) : 0;
     const symbolExposureRoom = Math.max(0, symbolCap - symbolExposure);
     const symbolExposureQty = entryPrice > 0 ? floorLot(symbolExposureRoom / entryPrice) : 0;
-    const targetQty = Math.max(0, Math.min(riskQty, capitalQty, symbolExposureQty));
-    const deltaQty = targetQty - pendingBuyQty;
-
     const structurePass = trend === "bullish"
       ? true
       : (trend === "rangebound" && (price <= ma5 || Math.abs(price - ma10) / price <= 0.015));
@@ -827,84 +921,161 @@ export async function runEtfBatchDecide(
     const sectorScore = scoreCalibrationVersion === "v2"
       ? hotScoreToSectionScoreV2(hotScore, sectors, sectors.newsScoreDegraded)
       : hotScoreToSectionScore(hotScore, sectors, sectors.newsScoreDegraded);
-    const friction = executionFrictionScore({ pendingBuyQty, pendingSellQty, deltaQty, targetQty, symbolExposureQty });
+    const friction = executionFrictionScore({ pendingBuyQty, pendingSellQty, deltaQty: 0, targetQty: LOT_SIZE, symbolExposureQty });
     const totalScore = round3(Math.min(100, technicalScore + riskReward + sectorScore + friction * 0.1));
-
-    const actionResult = toAction({ score: totalScore, passedLayerA, pendingBuyQty, deltaQty, targetQty, unitFailed: Boolean(unitFailure) });
-    const actionReasons = collectActionReasons({
-      action: actionResult.action,
-      score: totalScore,
-      passedLayerA,
-      pendingBuyQty,
-      deltaQty,
-      layerAReasons,
-      unitFailed: Boolean(unitFailure),
-      targetQty,
-      riskQty,
-      capitalQty,
-      symbolExposureQty
-    });
     const structureReason = toStructureReason({ trend, structurePass });
-
-    resultItems.push({
+    const theme = themeBySymbol.get(symbol) ?? "unknown";
+    const themeState = themeExposureState.get(theme) ?? { cap: themeCap, exposure: 0, room: themeCap };
+    pendingItems.push({
       symbol,
       normalizedSymbol: analyzeItem.normalizedSymbol,
       name: q.name ?? "",
+      unitFailure,
+      trend,
+      price,
+      ma5,
+      ma10,
+      ma20,
+      high30,
+      low30,
+      structurePass,
+      structureReason,
+      layerAReasons,
+      passedLayerA,
+      technicalScore,
+      riskReward,
+      sectorScore,
+      totalScore,
+      positionMarketValue,
+      pendingBuyQty,
+      symbolExposure,
+      symbolCap,
+      symbolRatio,
+      symbolExposureRoom,
+      symbolExposureQty,
+      entryPrice,
+      stopLoss,
+      riskQty,
+      capitalQty,
+      theme,
+      themeCap: themeState.cap,
+      themeExposure: themeState.exposure,
+      themeRatio: themeState.cap > 0 ? themeState.exposure / themeState.cap : 0,
+      themeExposureRoom: themeState.room,
+      themeExposureQty: 0,
+      targetQty: 0,
+      deltaQty: 0,
+      action: "no_trade",
+      actionReasons: [],
+      priceVsMa5Pct,
+      priceVsMa10Pct,
+      safetyMargin
+    });
+  }
+
+  const byScore = [...pendingItems].sort((a, b) => b.totalScore - a.totalScore);
+  const resultItems: EtfBatchDecideResponse["results"] = [];
+  for (const item of byScore) {
+    const themeState = themeExposureState.get(item.theme) ?? { cap: themeCap, exposure: 0, room: themeCap };
+    const themeExposureQty = item.entryPrice > 0 ? floorLot(themeState.room / item.entryPrice) : 0;
+    const targetQty = Math.max(0, Math.min(item.riskQty, item.capitalQty, item.symbolExposureQty, themeExposureQty));
+    const deltaQty = targetQty - item.pendingBuyQty;
+    const actionResult = toAction({
+      score: item.totalScore,
+      passedLayerA: item.passedLayerA,
+      pendingBuyQty: item.pendingBuyQty,
+      deltaQty,
+      targetQty,
+      unitFailed: Boolean(item.unitFailure)
+    });
+    const actionReasons = collectActionReasons({
+      action: actionResult.action,
+      score: item.totalScore,
+      passedLayerA: item.passedLayerA,
+      pendingBuyQty: item.pendingBuyQty,
+      deltaQty,
+      layerAReasons: item.layerAReasons,
+      unitFailed: Boolean(item.unitFailure),
+      targetQty,
+      riskQty: item.riskQty,
+      capitalQty: item.capitalQty,
+      symbolExposureQty: item.symbolExposureQty,
+      themeExposureQty
+    });
+    if (targetQty > 0) {
+      const allocated = targetQty * item.entryPrice;
+      themeState.exposure += allocated;
+      themeState.room = Math.max(0, themeState.room - allocated);
+      themeExposureState.set(item.theme, themeState);
+    }
+    resultItems.push({
+      symbol: item.symbol,
+      normalizedSymbol: item.normalizedSymbol,
+      name: item.name,
       unitCheck: {
-        status: unitFailure ? "fail" : "pass",
-        reason: unitFailure
+        status: item.unitFailure ? "fail" : "pass",
+        reason: item.unitFailure
       },
       exposureMetrics: {
-        positionMarketValue: round3(positionMarketValue),
-        pendingBuyQty,
-        currentPriceUsed: round3(price),
-        symbolExposure: round3(symbolExposure),
-        symbolCap: round3(symbolCap),
-        symbolRatio: round3(symbolRatio),
-        symbolExposureRoom: round3(symbolExposureRoom),
-        symbolExposureQty,
+        positionMarketValue: round3(item.positionMarketValue),
+        pendingBuyQty: item.pendingBuyQty,
+        currentPriceUsed: round3(item.price),
+        symbolExposure: round3(item.symbolExposure),
+        symbolCap: round3(item.symbolCap),
+        symbolRatio: round3(item.symbolRatio),
+        symbolExposureRoom: round3(item.symbolExposureRoom),
+        symbolExposureQty: item.symbolExposureQty,
+        theme: item.theme,
+        themeExposure: round3(item.themeExposure),
+        themeCap: round3(item.themeCap),
+        themeRatio: round3(item.themeRatio),
+        themeExposureRoom: round3(item.themeExposureRoom),
+        themeExposureQty,
         dataSourceTimestamp: snapshot.portfolio.updatedAt
       },
       positioning: {
-        entryPrice: round3(entryPrice),
-        stopLoss: round3(stopLoss),
-        riskQty,
-        capitalQty,
+        entryPrice: round3(item.entryPrice),
+        stopLoss: round3(item.stopLoss),
+        riskQty: item.riskQty,
+        capitalQty: item.capitalQty,
         targetQty,
         deltaQty
       },
       scoring: {
         layerA: {
-          passed: passedLayerA,
-          reasons: layerAReasons
+          passed: item.passedLayerA,
+          reasons: item.layerAReasons
         },
         layerB: {
-          technicalPosition: technicalScore,
-          riskReward,
-          sectorHotness: sectorScore
+          technicalPosition: item.technicalScore,
+          riskReward: item.riskReward,
+          sectorHotness: item.sectorScore
         },
-        total: totalScore
+        total: item.totalScore
       },
       marketState: {
-        trend,
-        trendZh: toTrendZh(trend),
-        price: round3(price),
-        ma5: round3(ma5),
-        ma10: round3(ma10),
-        ma20: round3(ma20),
-        high30: round3(high30),
-        low30: round3(low30),
-        priceVsMa5Pct: round2(priceVsMa5Pct),
-        priceVsMa10Pct: round2(priceVsMa10Pct),
-        safetyMarginPct: round2(safetyMargin * 100),
-        structurePass,
-        structureReason,
-        structureReasonZh: toStructureReasonZh(structureReason)
+        trend: item.trend,
+        trendZh: toTrendZh(item.trend),
+        price: round3(item.price),
+        ma5: round3(item.ma5),
+        ma10: round3(item.ma10),
+        ma20: round3(item.ma20),
+        high30: round3(item.high30),
+        low30: round3(item.low30),
+        priceVsMa5Pct: round2(item.priceVsMa5Pct),
+        priceVsMa10Pct: round2(item.priceVsMa10Pct),
+        safetyMarginPct: round2(item.safetyMargin * 100),
+        structurePass: item.structurePass,
+        structureReason: item.structureReason,
+        structureReasonZh: toStructureReasonZh(item.structureReason)
       },
       action: actionResult.action,
       actionReasons
     });
   }
+
+  const sorted = [...resultItems].sort((a, b) => b.scoring.total - a.scoring.total);
+  const watchlist = sorted.filter((item) => item.scoring.total >= 63 && item.scoring.total < 70).map((item) => item.symbol);
 
   if (unitMismatchFound) {
     return {
@@ -917,14 +1088,11 @@ export async function runEtfBatchDecide(
         status: "aborted",
         abortReason: "unit_mismatch"
       },
-      results: resultItems,
+      results: sorted,
       watchlist: [],
       errors
     };
   }
-
-  const sorted = [...resultItems].sort((a, b) => b.scoring.total - a.scoring.total);
-  const watchlist = sorted.filter((item) => item.scoring.total >= 63 && item.scoring.total < 70).map((item) => item.symbol);
 
   return {
     ...baseResponse,

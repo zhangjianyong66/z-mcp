@@ -35,9 +35,11 @@
   - 默认 provider：`xueqiu`
 - `etf_batch_decide`
   - 批量计算 ETF 决策结果（评分、仓位、动作归因）
-  - 最多支持 20 个 symbol
+  - 最多支持 40 个 symbol
   - 自动读取 `get_portfolio_and_orders` 的账户快照
   - 返回结构化 JSON：`globalChecks/results/watchlist/errors`
+  - 每个 `result` 关键字段：`symbol`、`action`、`actionReasons`、`positioning`、`scoring`、`marketState`
+  - 部分失败时返回 `results` 和 `errors`；全局门禁失败时中止
   - 每个 `result` 新增 `marketState`（趋势/结构/均线偏离/安全边际）
   - 触发 `UNIT_MISMATCH` 或账户快照缺失时全局中止
 - `etf_list`
@@ -198,7 +200,8 @@ npm run build
   "days": 60,
   "timeout": 20,
   "riskPct": 0.01,
-  "singleEtfExposureCapPct": 0.2
+  "singleEtfExposureCapPct": 0.2,
+  "themeExposureCapPct": 0.2
 }
 ```
 
@@ -225,6 +228,8 @@ npm run build
   "timeout": 20
 }
 ```
+
+- 每次调用 `sector_list` 后，服务会自动将当次“热门榜（hot）”全量刷新写入数据库表 `sector_hot_latest`（与 `sortBy` 入参无关）。
 
 ## 返回结构示例
 
@@ -295,8 +300,16 @@ npm run build
 - `results`（每个 symbol 的 `quote`、`indicators`、`recentKlines`）
 - `errors`（失败项同上）
 
+`etf_batch_decide` 返回（顶层字段）：
+
+- `globalChecks`（全局门禁检查结果）
+- `results`（成功计算结果列表）
+- `watchlist`（观察名单）
+- `errors`（失败项列表）
+
 `etf_batch_decide` 返回（每个 `result` 关键字段）：
 
+- `symbol`
 - `positioning`（`entryPrice/stopLoss/targetQty/deltaQty`）
 - `scoring`（LayerA/LayerB/total）
 - `action`、`actionReasons`
@@ -307,6 +320,7 @@ npm run build
     - `risk_not_definable`
     - `insufficient_exposure_room`
     - `single_exposure_limit`
+    - `theme_exposure_limit`
     - `capital_limit`
     - `risk_limit`
     - `unit_mismatch`
@@ -321,6 +335,8 @@ npm run build
   - `price/ma5/ma10/ma20/high30/low30`
   - `priceVsMa5Pct`、`priceVsMa10Pct`、`safetyMarginPct`
   - `structurePass`、`structureReason`、`structureReasonZh`
+
+说明：返回字段以实际响应为准，新增字段遵循向后兼容。
 
 `etf_list` 返回：
 
@@ -343,6 +359,13 @@ npm run build
 - `total`
 - `newsScoreDegraded`
 - `data`
+
+`sector_hot_latest`（数据库最新热门行业快照表）字段：
+- `sector_name`（主键）
+- `change_percent/up_count/down_count/amount/net_inflow`
+- `leader_stock/leader_latest_price/leader_change_percent`
+- `market_score/news_score/hot_score`
+- `source/generated_at/updated_at`
 
 `sector_list` 出参 JSON Schema：
 
@@ -440,7 +463,11 @@ npm run build
 5. 单标的暴露空间足够
 - 若 `symbolExposureQty < 100`（一手）触发 `insufficient_exposure_room`。
 
-6. 单位一致性检查通过
+6. 同主题暴露空间足够
+- 同一 `theme`（来自 `etf_universe.theme`）按总分降序竞争主题额度。
+- 若 `themeExposureQty <= 0`，触发 `theme_exposure_limit`。
+
+7. 单位一致性检查通过
 - 若出现单位异常，触发 `unit_mismatch`，并进入全局中止路径。
 
 ### LayerB 打分（总分）

@@ -1,6 +1,6 @@
 # z-mcp search server
 
-一个个人使用的 MCP search server。当前提供通用搜索工具 `web_search`，以及固定热点聚合工具 `finance_hotnews`。
+一个个人使用的 MCP search server。当前提供通用搜索工具 `web_search`、财经热点聚合工具 `finance_hotnews`、中文公开榜单聚合工具 `chinese_hot_trends`，以及完整热门信息挖掘流水线 `hot_mining_pipeline`。
 
 ## 功能
 
@@ -11,9 +11,19 @@
   - 未传 `provider` 时默认使用 `aliyun`
 - `finance_hotnews`
   - 返回当前财经热点新闻的结构化结果
-  - 优先使用财经站点直抓，结果不足时回退到现有 search providers
+  - 优先使用财经站点和媒体站直抓，结果不足时回退到现有 search providers
   - 支持可选参数：`limit`、`timeout`、`include_sectors`、`search_fallback`
   - 不生成 Markdown 报告、不写本地文件
+- `chinese_hot_trends`
+  - 聚合中文互联网公开热点榜单
+  - 默认来源：百度热搜、知乎热搜、B 站热门
+  - 支持可选参数：`sources`、`limit`、`timeout`、`verify_with_search`
+  - 只返回榜单元数据、标题、链接、热度、来源和可选搜索验证结果
+- `hot_mining_pipeline`
+  - 执行“热点发现 + 搜索验证 + 行业补充 + 长尾发现”的组合流水线
+  - 热点发现复用 `chinese_hot_trends`
+  - 行业补充复用 `finance_hotnews`
+  - 长尾发现使用搜索 provider 查询技术/开源趋势
 
 ## 环境变量
 
@@ -94,6 +104,27 @@ npm run build
 }
 ```
 
+中文公开榜单示例：
+
+```json
+{
+  "sources": ["baidu", "zhihu", "bilibili"],
+  "limit": 20,
+  "verify_with_search": true
+}
+```
+
+完整热门信息挖掘流水线示例：
+
+```json
+{
+  "sources": ["baidu", "zhihu", "bilibili"],
+  "limit": 20,
+  "include_industry": true,
+  "include_long_tail": true
+}
+```
+
 百度示例：
 
 ```json
@@ -171,5 +202,39 @@ DuckDuckGo 示例：
     }
   ],
   "queryMode": "fixed-hotnews"
+}
+```
+
+`chinese_hot_trends` 返回结构示例：
+
+```json
+{
+  "generatedAt": "2026-05-17T08:00:00.000Z",
+  "count": 2,
+  "trends": [
+    {
+      "title": "示例热搜",
+      "url": "https://top.baidu.com/board?tab=realtime",
+      "snippet": "示例摘要",
+      "rank": 1,
+      "heat": 4820000,
+      "category": "热点发现",
+      "riskLevel": "low",
+      "sources": ["baidu"],
+      "verification": [
+        {
+          "title": "示例新闻验证",
+          "url": "https://example.com/news",
+          "snippet": "示例摘要",
+          "provider": "aliyun"
+        }
+      ]
+    }
+  ],
+  "sourceStats": {
+    "baidu": 1,
+    "zhihu": 1
+  },
+  "queryMode": "public-hot-list"
 }
 ```

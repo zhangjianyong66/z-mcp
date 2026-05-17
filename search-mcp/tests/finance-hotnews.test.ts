@@ -6,6 +6,7 @@ import {
   extractHotSectors,
   normalizeFinanceHotnewsArgs,
   parse10jqkaHtml,
+  parseGenericNewsLinksHtml,
   parseSinaFinanceHtml,
   runFinanceHotnews
 } from "../src/finance-hotnews.js";
@@ -47,6 +48,36 @@ test("parse10jqkaHtml normalizes relative URLs and titles", () => {
   assert.equal(results.length, 1);
   assert.equal(results[0]?.url, "https://www.10jqka.com.cn/news/20260412/c123456789.shtml");
   assert.equal(results[0]?.source, "同花顺");
+});
+
+test("parseGenericNewsLinksHtml extracts links for expanded finance media sources", () => {
+  const html = `
+    <a href="/2026/0517/123.shtml">人工智能产业链公司业绩持续改善</a>
+    <a href="https://www.yicai.com/news/456.html" title="新能源车出口保持高增长"></a>
+  `;
+
+  const results = parseGenericNewsLinksHtml(html, {
+    source: "第一财经",
+    baseUrl: "https://www.yicai.com",
+    urlAllowList: ["yicai.com"]
+  });
+
+  assert.deepEqual(results, [
+    {
+      title: "人工智能产业链公司业绩持续改善",
+      url: "https://www.yicai.com/2026/0517/123.shtml",
+      snippet: "",
+      source: "第一财经",
+      type: "direct"
+    },
+    {
+      title: "新能源车出口保持高增长",
+      url: "https://www.yicai.com/news/456.html",
+      snippet: "",
+      source: "第一财经",
+      type: "direct"
+    }
+  ]);
 });
 
 test("dedupeFinanceHotnews removes duplicates by URL and title", () => {

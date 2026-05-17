@@ -299,6 +299,7 @@ export type SaveOrdersResult = {
 export type EtfBatchDecideInput = EtfBatchKlineInput & {
   riskPct?: number;
   singleEtfExposureCapPct?: number;
+  themeExposureCapPct?: number;
   /**
    * Deprecated and ignored. etf_batch_decide always uses v2 scoring.
    */
@@ -327,6 +328,7 @@ export type EtfBatchDecideActionReason =
   | "risk_not_definable"
   | "insufficient_exposure_room"
   | "single_exposure_limit"
+  | "theme_exposure_limit"
   | "capital_limit"
   | "risk_limit"
   | "unit_mismatch"
@@ -359,6 +361,12 @@ export type EtfBatchDecideResultItem = {
     symbolRatio: number;
     symbolExposureRoom: number;
     symbolExposureQty: number;
+    theme: string;
+    themeExposure: number;
+    themeCap: number;
+    themeRatio: number;
+    themeExposureRoom: number;
+    themeExposureQty: number;
     dataSourceTimestamp: string;
   };
   positioning: {
@@ -420,6 +428,7 @@ export type EtfBatchDecideResponse = {
     timeout: number;
     riskPct: number;
     singleEtfExposureCapPct: number;
+    themeExposureCapPct: number;
     total: number;
   };
   snapshotMeta: {

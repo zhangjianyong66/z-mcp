@@ -23,3 +23,9 @@ test("etf-scanner reason mapping keeps unknown_reason fallback in all contract d
   }
 });
 
+test("etf-scanner reason mapping includes theme_exposure_limit in all contract docs", () => {
+  for (const file of CONTRACT_FILES) {
+    const content = readFileSync(resolve(process.cwd(), file), "utf8");
+    assert.match(content, /`theme_exposure_limit`\s*->\s*`主题集中度上限触发`/, `${file} missing theme_exposure_limit mapping`);
+  }
+});

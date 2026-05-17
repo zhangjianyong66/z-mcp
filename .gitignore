@@ -14,3 +14,9 @@ logs/
 .env
 .env.*
 !.env.example
+*.out
+*.tmp
+*.cache
+*.pid
+*.seed
+.pytest_cache/

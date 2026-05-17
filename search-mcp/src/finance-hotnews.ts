@@ -78,6 +78,15 @@ function stripTags(value: string): string {
   return value.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 }
 
+function decodeHtmlEntity(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 function normalizeUrl(url: string): string {
   return url.trim().replace(/#.*$/, "").replace(/\/+$/, "");
 }
@@ -169,6 +178,54 @@ export function parse10jqkaHtml(html: string): FinanceHotnewsItem[] {
   return newsList.slice(0, 10);
 }
 
+export function parseGenericNewsLinksHtml(
+  html: string,
+  options: { source: string; baseUrl: string; urlAllowList: string[]; maxResults?: number }
+): FinanceHotnewsItem[] {
+  const newsList: FinanceHotnewsItem[] = [];
+  const seenTitles = new Set<string>();
+  const pattern = /<a([^>]*)>([\s\S]*?)<\/a>/gi;
+
+  for (const match of html.matchAll(pattern)) {
+    const attrs = match[1] ?? "";
+    const rawUrl = attrs.match(/\shref="([^"]+)"/i)?.[1]?.trim() ?? "";
+    const rawTitle = (attrs.match(/\stitle="([^"]*)"/i)?.[1] || stripTags(match[2] ?? "")).trim();
+    if (!rawUrl || !rawTitle) {
+      continue;
+    }
+
+    const url = rawUrl.startsWith("http") ? normalizeUrl(rawUrl) : normalizeUrl(new URL(rawUrl, options.baseUrl).toString());
+    const title = decodeHtmlEntity(stripTags(rawTitle));
+    if (!url || !title || title.length < 10 || title.length >= 100) {
+      continue;
+    }
+
+    if (!options.urlAllowList.some((domain) => url.includes(domain))) {
+      continue;
+    }
+
+    const normalizedTitle = normalizeTitle(title);
+    if (seenTitles.has(normalizedTitle)) {
+      continue;
+    }
+
+    seenTitles.add(normalizedTitle);
+    newsList.push({
+      title,
+      url,
+      snippet: "",
+      source: options.source,
+      type: "direct"
+    });
+
+    if (newsList.length >= (options.maxResults ?? 10)) {
+      break;
+    }
+  }
+
+  return newsList;
+}
+
 async function fetchSinaFinance(timeoutMs: number): Promise<FinanceHotnewsItem[]> {
   return parseSinaFinanceHtml(await fetchHtml("https://finance.sina.com.cn/stock/", timeoutMs));
 }
@@ -177,10 +234,28 @@ async function fetch10jqkaHot(timeoutMs: number): Promise<FinanceHotnewsItem[]> 
   return parse10jqkaHtml(await fetchHtml("https://www.10jqka.com.cn/", timeoutMs));
 }
 
+async function fetchYicaiNews(timeoutMs: number): Promise<FinanceHotnewsItem[]> {
+  return parseGenericNewsLinksHtml(await fetchHtml("https://www.yicai.com/news/", timeoutMs), {
+    source: "第一财经",
+    baseUrl: "https://www.yicai.com",
+    urlAllowList: ["yicai.com"]
+  });
+}
+
+async function fetch36KrNews(timeoutMs: number): Promise<FinanceHotnewsItem[]> {
+  return parseGenericNewsLinksHtml(await fetchHtml("https://www.36kr.com/information/web_news/latest", timeoutMs), {
+    source: "36氪",
+    baseUrl: "https://www.36kr.com",
+    urlAllowList: ["36kr.com"]
+  });
+}
+
 function getDefaultDirectSources(): DirectSource[] {
   return [
     { name: "新浪财经", fetch: fetchSinaFinance },
-    { name: "同花顺", fetch: fetch10jqkaHot }
+    { name: "同花顺", fetch: fetch10jqkaHot },
+    { name: "第一财经", fetch: fetchYicaiNews },
+    { name: "36氪", fetch: fetch36KrNews }
   ];
 }
 
