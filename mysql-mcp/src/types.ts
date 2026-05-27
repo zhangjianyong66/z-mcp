@@ -16,15 +16,21 @@ export class AppError extends Error {
   }
 }
 
-export interface MysqlConfig {
+export interface DatasourceConfig {
+  name: string;
+  description: string;
   host: string;
   port: number;
   user: string;
   password: string;
   database: string;
   ssl: boolean;
+}
+
+export interface AppConfig {
   queryTimeoutMs: number;
   maxRows: number;
+  datasources: DatasourceConfig[];
 }
 
 export interface QueryField {

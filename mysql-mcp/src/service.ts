@@ -2,11 +2,17 @@ import { applyLimit, assertReadOnlySql } from "./sql-guard.js";
 import { AppError, type MysqlClient, type QueryParams } from "./types.js";
 
 interface ServiceOptions {
-  defaultDatabase: string;
   maxRows: number;
 }
 
+interface DatasourceEntry {
+  description: string;
+  database: string;
+  client: MysqlClient;
+}
+
 interface QueryInput {
+  datasource: string;
   sql: string;
   params?: QueryParams;
   limit?: number;
@@ -30,11 +36,24 @@ function requireName(value: string | undefined, label: string): string {
 
 export class MysqlService {
   constructor(
-    private readonly client: MysqlClient,
+    private readonly datasources: Map<string, DatasourceEntry>,
     private readonly options: ServiceOptions
   ) {}
 
+  listDatasources(): { datasources: Array<{ name: string; description: string; database: string }> } {
+    return {
+      datasources: [...this.datasources.entries()]
+        .map(([name, datasource]) => ({
+          name,
+          description: datasource.description,
+          database: datasource.database
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name))
+    };
+  }
+
   async query(input: QueryInput): Promise<{ rows: unknown[]; fields: string[]; row_count: number; truncated: boolean }> {
+    const datasource = this.resolveDatasource(input.datasource);
     assertReadOnlySql(input.sql);
     const limit = input.limit ?? this.options.maxRows;
     if (!Number.isInteger(limit) || limit < 1 || limit > this.options.maxRows) {
@@ -43,7 +62,7 @@ export class MysqlService {
 
     const limited = applyLimit(input.sql, limit);
     const params = [...(input.params ?? []), ...limited.paramsToAppend];
-    const result = await this.client.query(limited.sql, params);
+    const result = await datasource.client.query(limited.sql, params);
     const rows = result.rows.slice(0, limit);
 
     return {
@@ -54,14 +73,16 @@ export class MysqlService {
     };
   }
 
-  async listDatabases(): Promise<{ databases: string[] }> {
-    const result = await this.client.query("SHOW DATABASES");
+  async listDatabases(input: { datasource: string }): Promise<{ databases: string[] }> {
+    const datasource = this.resolveDatasource(input.datasource);
+    const result = await datasource.client.query("SHOW DATABASES");
     return { databases: result.rows.map(firstStringValue).filter(Boolean) };
   }
 
-  async listTables(input: { database?: string }): Promise<{ database: string; tables: Array<{ name: string; type: string }> }> {
-    const database = requireName(input.database ?? this.options.defaultDatabase, "database");
-    const result = await this.client.query(
+  async listTables(input: { datasource: string; database?: string }): Promise<{ database: string; tables: Array<{ name: string; type: string }> }> {
+    const datasource = this.resolveDatasource(input.datasource);
+    const database = requireName(input.database ?? datasource.database, "database");
+    const result = await datasource.client.query(
       [
         "SELECT table_name, table_type",
         "FROM information_schema.tables",
@@ -83,14 +104,15 @@ export class MysqlService {
     };
   }
 
-  async describeTable(input: { database?: string; table: string }): Promise<{
+  async describeTable(input: { datasource: string; database?: string; table: string }): Promise<{
     database: string;
     table: string;
     columns: Array<{ name: string; data_type: string; nullable: boolean; key: string; default: unknown; extra: string }>;
   }> {
-    const database = requireName(input.database ?? this.options.defaultDatabase, "database");
+    const datasource = this.resolveDatasource(input.datasource);
+    const database = requireName(input.database ?? datasource.database, "database");
     const table = requireName(input.table, "table");
-    const result = await this.client.query(
+    const result = await datasource.client.query(
       [
         "SELECT column_name, data_type, is_nullable, column_key, column_default, extra",
         "FROM information_schema.columns",
@@ -116,5 +138,13 @@ export class MysqlService {
       })
     };
   }
-}
 
+  private resolveDatasource(name: string): DatasourceEntry {
+    const datasourceName = requireName(name, "datasource");
+    const datasource = this.datasources.get(datasourceName);
+    if (!datasource) {
+      throw new AppError("invalid_input", `Unknown datasource: ${datasourceName}`);
+    }
+    return datasource;
+  }
+}

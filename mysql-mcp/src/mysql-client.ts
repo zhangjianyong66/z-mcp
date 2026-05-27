@@ -1,11 +1,11 @@
 import mysql, { type Pool, type QueryOptions, type RowDataPacket } from "mysql2/promise";
-import type { MysqlClient, MysqlConfig, QueryParams } from "./types.js";
+import type { DatasourceConfig, MysqlClient, QueryParams } from "./types.js";
 
 export class MysqlPoolClient implements MysqlClient {
   private readonly pool: Pool;
   private readonly queryTimeoutMs: number;
 
-  constructor(config: MysqlConfig) {
+  constructor(config: DatasourceConfig & { queryTimeoutMs: number }) {
     this.queryTimeoutMs = config.queryTimeoutMs;
     this.pool = mysql.createPool({
       host: config.host,
@@ -35,4 +35,3 @@ export class MysqlPoolClient implements MysqlClient {
     await this.pool.end();
   }
 }
-
