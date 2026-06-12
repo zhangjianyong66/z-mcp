@@ -29,3 +29,35 @@
   - `sector_hot_latest`：`sector_list` 每次调用后刷新的热门行业快照；代码会自动创建该表，但初始化脚本也包含完整定义。
 - `sector_list` 依赖本机 `python3` 和 `akshare` 包，可通过 `AKSHARE_PYTHON_BIN` 指定虚拟环境解释器。
 - `xueqiu` 数据源优先使用 `XUEQIU_COOKIE`；未配置时会尝试 Playwright 自动获取 Cookie。
+
+## mysql-mcp
+
+- 目录：`mysql-mcp/`
+- 技术栈：Node.js ESM + TypeScript，MCP SDK，`mysql2/promise`，Node built-in test runner。
+- 常用命令：
+  - `npm run check`：TypeScript 类型检查。
+  - `npm test`：运行 Node 测试。
+  - `npm run build`：构建到 `dist/`。
+  - `npm run dev`：以 `tsx src/index.ts` 启动开发服务。
+- 一个 `mysql-mcp` server 实例只连接一个 MySQL 数据源；不支持 `MYSQL_DATASOURCES` 多数据源 JSON 配置。
+- 如需同时使用多个 MySQL 数据源，应在 MCP 客户端配置多个 `mysql-mcp` server 条目，并分别设置不同环境变量。
+- MySQL 配置环境变量：
+  - `MYSQL_HOST` 必填
+  - `MYSQL_PORT` 默认 `3306`
+  - `MYSQL_USER` 必填
+  - `MYSQL_PASSWORD` 默认空字符串
+  - `MYSQL_DATABASE` 必填
+  - `MYSQL_SSL` 默认 `false`
+  - `MYSQL_QUERY_TIMEOUT_MS` 默认 `30000`
+  - `MYSQL_MAX_ROWS` 默认 `500`，最大 `5000`
+- 当前工具使用当前 server 实例绑定的数据源，不接收 `datasource` 参数；工具包括 `mysql_query`、`list_databases`、`list_tables`、`describe_table`。
+- `list_datasources` 工具已移除。
+
+## cdp-browser-mcp
+
+- 目录：`cdp-browser-mcp/`
+- 技术栈：Node.js ESM + TypeScript，MCP SDK，Playwright `chromium.connectOverCDP`。
+- 单个 MCP server 进程启动时读取一次 `CDP_ENDPOINT`，默认 `http://127.0.0.1:9222`；当前所有浏览器操作工具都连接这个进程级 endpoint，不支持单次工具调用动态切换 Chrome 实例。
+- 如需同时控制系统 Chrome 和微信开发工具内置 Chrome，推荐在 MCP 客户端配置两个 server 条目，分别设置不同 `CDP_ENDPOINT`，例如系统 Chrome 用 `9222`，微信开发工具用另一个远程调试端口。
+- `start_chrome_cdp` 工具支持传入 `cdp_port`、`chrome_bin`、`user_data_dir`、`profile_directory`、`log_file` 启动指定 Chrome；但启动后当前 MCP 进程不会自动切换到该端口，后续操作仍取决于该进程的 `CDP_ENDPOINT`。
+- `scripts/start-chrome-cdp.sh` 会保守检测已有 Chrome/Chromium 进程；如果浏览器已运行但目标 CDP 端口不可访问，脚本会退出并提示手动用 `--remote-debugging-port` 重启。

@@ -17,8 +17,6 @@ export class AppError extends Error {
 }
 
 export interface DatasourceConfig {
-  name: string;
-  description: string;
   host: string;
   port: number;
   user: string;
@@ -30,7 +28,12 @@ export interface DatasourceConfig {
 export interface AppConfig {
   queryTimeoutMs: number;
   maxRows: number;
-  datasources: DatasourceConfig[];
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  ssl: boolean;
 }
 
 export interface QueryField {
