@@ -7,6 +7,7 @@
 本仓库提供多类 MCP 能力：
 
 - 图像生成与理解
+- 独立图片视觉理解
 - 联网搜索与财经热点
 - ETF/板块数据查询与分析
 - 飞书群聊管理
@@ -24,6 +25,7 @@ z-mcp/
 ├── cdp-browser-mcp/
 ├── feishu-mcp/
 ├── huawei-phone-push-mcp/
+├── image-view-mcp/
 ├── image-mcp/
 ├── mcp-cli/
 ├── minimax-music-mcp/
@@ -40,6 +42,7 @@ z-mcp/
 | 模块 | 主要能力 | 核心工具/命令 | 额外依赖 | 说明 |
 |---|---|---|---|---|
 | `image-mcp` | 生图、参考图编辑、图片理解 | `generate_image` `edit_image` `analyze_image` | DashScope API Key | [README](./image-mcp/README.md) |
+| `image-view-mcp` | 独立图片视觉理解 | `analyze_image` | DashScope API Key + 视觉模型 | [README](./image-view-mcp/README.md) |
 | `video-mcp` | 首尾帧图生视频 | `generate_video_from_frames` | DashScope API Key | [README](./video-mcp/README.md) |
 | `search-mcp` | 通用联网搜索、财经热点 | `web_search` `finance_hotnews` | 可选阿里/百度密钥 | [README](./search-mcp/README.md) |
 | `stock-data-mcp` | ETF 行情/K 线/分析/列表、行业板块 | `etf_*` `sector_list` | Playwright、Python+akshare（板块） | [README](./stock-data-mcp/README.md) |
@@ -71,6 +74,7 @@ z-mcp/
 
 ```bash
 cd image-mcp && npm install
+cd ../image-view-mcp && npm install
 cd ../search-mcp && npm install
 cd ../stock-data-mcp && npm install
 ```
@@ -104,6 +108,9 @@ npm start
 - `image-mcp`
   - 必需：`DASHSCOPE_API_KEY`
   - 常用：`DASHSCOPE_BASE_URL` `DASHSCOPE_MODEL` `VISION_MODEL`
+- `image-view-mcp`
+  - 必需：`DASHSCOPE_API_KEY` `VISION_MODEL`
+  - 常用：`DASHSCOPE_BASE_URL` `VISION_MODEL_CHAIN`
 - `video-mcp`
   - 必需：`DASHSCOPE_API_KEY`
   - 常用：`DASHSCOPE_BASE_URL` `DASHSCOPE_VIDEO_MODEL`
@@ -187,6 +194,7 @@ npm install
 
 # 查看 server 能力
 npm run dev -- inspect image
+npm run dev -- inspect image-view
 
 # 查看工具列表
 npm run dev -- list-tools search

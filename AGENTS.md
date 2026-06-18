@@ -52,6 +52,42 @@
   - `MYSQL_MAX_ROWS` 默认 `500`，最大 `5000`
 - 当前工具使用当前 server 实例绑定的数据源，不接收 `datasource` 参数；工具包括 `mysql_query`、`list_databases`、`list_tables`、`describe_table`。
 - `list_datasources` 工具已移除。
+- Codex CLI 已在 `~/.codex/config.toml` 配置独立 server `mysql-littlebao`，连接远程库 `littlebao`，账号 `littlebao_readonly` 仅授予 `littlebao.*` 的 `SELECT` 权限；密码只保存在 Codex 本机配置中，不写入项目说明。
+- Codex CLI 的 MySQL MCP server 应使用单数据源环境变量配置，例如 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`、`MYSQL_SSL`；不要再使用 `MYSQL_DATASOURCES`。
+- Codex CLI 当前配置中 `mysql` 连接 `integra_serve`，`mysql-z-blog` 连接 `blog`，`mysql-littlebao` 连接 `littlebao`，三个 server 均指向 `mysql-mcp/dist/src/index.js`。
+
+## image-mcp
+
+- 目录：`image-mcp/`
+- 技术栈：Node.js ESM + TypeScript，MCP SDK，DashScope 百炼多模态同步接口。
+- 常用命令：
+  - `npm run check`：TypeScript 类型检查。
+  - `npm test`：运行 Node 测试。
+  - `npm run build`：构建到 `dist/`。
+  - `npm run dev`：以 `tsx src/index.ts` 启动开发服务。
+- 工具包括 `generate_image`、`edit_image`、`analyze_image`。
+- 生图/图生图使用 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL`、`DASHSCOPE_MODEL` 或 `IMAGE_MODEL_CHAIN` 配置。
+- 图片理解 `analyze_image` 使用独立视觉配置：`VISION_API_KEY`、`VISION_BASE_URL`、`VISION_MODEL` 或 `VISION_MODEL_CHAIN`；未配置 `VISION_API_KEY` 时会回退到 `DASHSCOPE_API_KEY` / `LLM_API_KEY`。
+- `VISION_MODEL` 必须选择支持图片输入的百炼多模态模型；纯文本模型即使可调用，也不能完成视觉理解。
+- 当前实现调用 `POST /api/v1/services/aigc/multimodal-generation/generation`，请求内容按图片在前、文本提示词在后的顺序发送。
+
+## image-view-mcp
+
+- 目录：`image-view-mcp/`
+- 技术栈：Node.js ESM + TypeScript，MCP SDK，DashScope 百炼多模态同步接口。
+- 常用命令：
+  - `npm run check`：TypeScript 类型检查。
+  - `npm test`：运行 Node 测试。
+  - `npm run build`：构建到 `dist/`。
+  - `npm run dev`：以 `tsx src/index.ts` 启动开发服务。
+- 工具包括 `analyze_image`，专门用于图片描述、元素识别、截图理解和多图对比等只读视觉理解场景。
+- 配置环境变量：
+  - `DASHSCOPE_API_KEY` 必填。
+  - `DASHSCOPE_BASE_URL` 默认 `https://dashscope.aliyuncs.com`。
+  - `VISION_MODEL` 必填，建议使用 `qwen3.7-plus` 这类支持图片输入的多模态模型。
+  - `VISION_MODEL_CHAIN` 可选，支持内联 JSON 或 `file:` 路径，用于多模型回退。
+- 当前实现调用 `POST /api/v1/services/aigc/multimodal-generation/generation`，请求内容按图片在前、文本提示词在后的顺序发送。
+- 该模块不提供生图或图生图能力；生成类工具仍归属 `image-mcp`。
 
 ## cdp-browser-mcp
 

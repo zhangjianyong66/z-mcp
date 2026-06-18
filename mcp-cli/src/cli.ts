@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { argv, exit } from "node:process";
 
-export type ServerPresetName = "image" | "video" | "search" | "stock-data" | "huawei-phone-push";
+export type ServerPresetName = "image" | "image-view" | "video" | "search" | "stock-data" | "huawei-phone-push";
 export type RunMode = "dev" | "dist";
 export type CommandName = "inspect" | "list-tools" | "call-tool";
 
@@ -38,6 +38,10 @@ type ServerPreset = {
 
 const SERVER_PRESETS: Record<ServerPresetName, ServerPreset> = {
   image: { dir: "image-mcp" },
+  "image-view": {
+    dir: "image-view-mcp",
+    envPassthrough: ["DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL", "VISION_MODEL", "VISION_MODEL_CHAIN"]
+  },
   video: {
     dir: "video-mcp",
     envPassthrough: ["DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_MODEL"]
@@ -83,7 +87,7 @@ function toUsage(): string {
     "  mcp-cli call-tool <server> <tool> --input '{\"key\":\"value\"}' [--mode dev|dist]",
     "",
     "Servers:",
-    "  image | video | search | stock-data | huawei-phone-push",
+    "  image | image-view | video | search | stock-data | huawei-phone-push",
     "",
     "Options:",
     "  --mode dev|dist   Select how to launch the server. Default: dev",

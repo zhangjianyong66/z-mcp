@@ -73,6 +73,38 @@ test("resolveServerTarget defaults to sibling package paths", () => {
   assert.deepEqual(target.args, ["--import", "tsx", "src/index.ts"]);
 });
 
+test("resolveServerTarget supports image-view preset with vision env passthrough", () => {
+  const previousApiKey = process.env.DASHSCOPE_API_KEY;
+  const previousBaseURL = process.env.DASHSCOPE_BASE_URL;
+  const previousModel = process.env.VISION_MODEL;
+  process.env.DASHSCOPE_API_KEY = "vision-key";
+  process.env.DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com";
+  process.env.VISION_MODEL = "qwen3.7-plus";
+  try {
+    const target = resolveServerTarget({ serverName: "image-view" });
+    assert.match(target.cwd, /image-view-mcp$/);
+    assert.equal(target.env?.DASHSCOPE_API_KEY, "vision-key");
+    assert.equal(target.env?.DASHSCOPE_BASE_URL, "https://dashscope.aliyuncs.com");
+    assert.equal(target.env?.VISION_MODEL, "qwen3.7-plus");
+  } finally {
+    if (previousApiKey === undefined) {
+      delete process.env.DASHSCOPE_API_KEY;
+    } else {
+      process.env.DASHSCOPE_API_KEY = previousApiKey;
+    }
+    if (previousBaseURL === undefined) {
+      delete process.env.DASHSCOPE_BASE_URL;
+    } else {
+      process.env.DASHSCOPE_BASE_URL = previousBaseURL;
+    }
+    if (previousModel === undefined) {
+      delete process.env.VISION_MODEL;
+    } else {
+      process.env.VISION_MODEL = previousModel;
+    }
+  }
+});
+
 test("resolveServerTarget supports huawei-phone-push preset", () => {
   const target = resolveServerTarget({ serverName: "huawei-phone-push" });
   assert.match(target.cwd, /huawei-phone-push-mcp$/);
