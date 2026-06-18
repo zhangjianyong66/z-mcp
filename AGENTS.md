@@ -39,6 +39,8 @@
   - `npm test`：运行 Node 测试。
   - `npm run build`：构建到 `dist/`。
   - `npm run dev`：以 `tsx src/index.ts` 启动开发服务。
+- 当前 `tsconfig` 的实际构建入口为 `mysql-mcp/dist/src/index.js`。
+- Codex 全局配置中已添加 `mysql_littlebao` MCP server，指向 `/home/zhangjianyong/project/z-mcp/mysql-mcp/dist/src/index.js`；连接凭据保存在 `/home/zhangjianyong/.codex/config.toml`，不要写入项目文档。
 - 一个 `mysql-mcp` server 实例只连接一个 MySQL 数据源；不支持 `MYSQL_DATASOURCES` 多数据源 JSON 配置。
 - 如需同时使用多个 MySQL 数据源，应在 MCP 客户端配置多个 `mysql-mcp` server 条目，并分别设置不同环境变量。
 - MySQL 配置环境变量：
@@ -89,10 +91,31 @@
 - 当前实现调用 `POST /api/v1/services/aigc/multimodal-generation/generation`，请求内容按图片在前、文本提示词在后的顺序发送。
 - 该模块不提供生图或图生图能力；生成类工具仍归属 `image-mcp`。
 
+## search-mcp
+
+- 目录：`search-mcp/`
+- 技术栈：Node.js ESM + TypeScript，MCP SDK，`undici`，`dotenv`。
+- 常用命令：
+  - `npm ci`：安装锁定依赖。
+  - `npm run check`：TypeScript 类型检查。
+  - `npm test`：运行 Node 测试。
+  - `npm run build`：构建到 `dist/`。
+  - `npm run dev`：以 `tsx src/index.ts` 启动开发服务。
+- 当前 `tsconfig` 使用 `rootDir = "."`，实际构建入口为 `search-mcp/dist/src/index.js`。
+- Codex 全局配置中的 `search` MCP server 在 Linux 环境应指向 `/usr/bin/node` 和 `/home/zhangjianyong/project/z-mcp/search-mcp/dist/src/index.js`；搜索服务密钥保存在 `/home/zhangjianyong/.codex/config.toml`，不要写入项目文档。
+
 ## cdp-browser-mcp
 
 - 目录：`cdp-browser-mcp/`
 - 技术栈：Node.js ESM + TypeScript，MCP SDK，Playwright `chromium.connectOverCDP`。
+- 常用命令：
+  - `npm ci`：安装锁定依赖。
+  - `npm run check`：TypeScript 类型检查。
+  - `npm run build`：构建到 `dist/`。
+  - `npm test`：运行 Chrome CDP 启动脚本测试。
+  - `npm run dev`：以 `tsx src/index.ts` 启动开发服务。
+- 当前 `tsconfig` 使用 `rootDir = "."`，实际构建入口为 `cdp-browser-mcp/dist/src/index.js`。
+- Codex 全局配置中的 `cdp_browser` MCP server 在 Linux 环境应指向 `/usr/bin/node` 和 `/home/zhangjianyong/project/z-mcp/cdp-browser-mcp/dist/src/index.js`。
 - 单个 MCP server 进程启动时读取一次 `CDP_ENDPOINT`，默认 `http://127.0.0.1:9222`；当前所有浏览器操作工具都连接这个进程级 endpoint，不支持单次工具调用动态切换 Chrome 实例。
 - 如需同时控制系统 Chrome 和微信开发工具内置 Chrome，推荐在 MCP 客户端配置两个 server 条目，分别设置不同 `CDP_ENDPOINT`，例如系统 Chrome 用 `9222`，微信开发工具用另一个远程调试端口。
 - `start_chrome_cdp` 工具支持传入 `cdp_port`、`chrome_bin`、`user_data_dir`、`profile_directory`、`log_file` 启动指定 Chrome；但启动后当前 MCP 进程不会自动切换到该端口，后续操作仍取决于该进程的 `CDP_ENDPOINT`。
