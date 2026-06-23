@@ -23,7 +23,7 @@ test("getPortfolioAndOrders returns friendly message when no data", async () => 
   assert.equal(snapshot.portfolio, null);
   assert.equal(snapshot.orders.length, 0);
   assert.equal(snapshot.stats.total, 0);
-  assert.ok(snapshot.message?.includes("当前无持仓信息"));
+  assert.equal(snapshot.message, "当前无持仓信息，请先保存持仓信息");
 });
 
 test("savePortfolio overwrites and returns warning when market value mismatches", async () => {

@@ -380,14 +380,10 @@ npm run build
   - 字段：`totalCapital`、`availableCapital`、`positions`、`updatedAt?`
   - `positions` 字段：`symbol`、`name`、`quantity`、`costPrice`、`currentPrice`、`marketValue`
   - `marketValue` 以传入值为准，同时会校验 `quantity*currentPrice`，不一致时返回 `warnings`
-- `save_trade_orders`
-  - 保存/更新交易单信息（全量覆盖）
-  - 每笔字段：`orderId?`、`symbol`、`name`、`side`、`quantity`、`orderTime`、`status`
-  - 自动失效：按 `Asia/Shanghai` 自然日，`pending` 挂单当天未成交次日自动转 `expired`
 - `get_portfolio_and_orders`
   - 获取持仓与交易单
   - 返回前会执行自动失效
-  - 若从未保存过数据，返回友好提示：`当前无持仓信息，请先保存持仓或交易单信息`
+  - 若从未保存过数据，返回友好提示：`当前无持仓信息，请先保存持仓信息`
 
 新增环境变量：
 
@@ -413,24 +409,6 @@ npm run build
       "costPrice": 4.0,
       "currentPrice": 4.2,
       "marketValue": 4200
-    }
-  ]
-}
-```
-
-`save_trade_orders`:
-
-```json
-{
-  "orders": [
-    {
-      "orderId": "ord-001",
-      "symbol": "510300",
-      "name": "沪深300ETF",
-      "side": "buy",
-      "quantity": 100,
-      "orderTime": "2026-04-30T10:15:00+08:00",
-      "status": "pending"
     }
   ]
 }

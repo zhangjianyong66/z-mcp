@@ -281,7 +281,7 @@ export async function getPortfolioAndOrders(now: Date = new Date()): Promise<Por
       stats: buildOrderStats(expiredApplied.orders),
       generatedAt: now.toISOString(),
       autoExpiredOrderCount: expiredApplied.expiredCount,
-      message: expiredApplied.orders.length > 0 ? undefined : "当前无持仓信息，请先保存持仓或交易单信息"
+      message: expiredApplied.orders.length > 0 ? undefined : "当前无持仓信息，请先保存持仓信息"
     };
   }
 

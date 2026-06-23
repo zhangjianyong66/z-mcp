@@ -19,7 +19,7 @@ import {
   logStockDataEvent
 } from "./logging.js";
 import { warmXueqiuCookie } from "./providers/xueqiu.js";
-import { getPortfolioAndOrders, saveOrders, savePortfolio } from "./portfolio-store.js";
+import { getPortfolioAndOrders, savePortfolio } from "./portfolio-store.js";
 import { compressBatchResult } from "./batch-response.js";
 
 function toToolError(error: unknown): { content: Array<{ type: "text"; text: string }>; isError: true } {
@@ -112,16 +112,6 @@ const portfolioPositionSchema = z.object({
   costPrice: z.number().min(0),
   currentPrice: z.number().min(0),
   marketValue: z.number().min(0)
-});
-
-const portfolioOrderSchema = z.object({
-  orderId: z.string().min(1).optional(),
-  symbol: z.string().min(1),
-  name: z.string().min(1),
-  side: z.enum(["buy", "sell"]),
-  quantity: z.number().positive(),
-  orderTime: isoDatetimeSchema,
-  status: z.enum(["pending", "filled", "cancelled", "expired"])
 });
 
 server.tool(
@@ -380,33 +370,6 @@ server.tool(
             positions,
             updatedAt
           })
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result)
-          }
-        ]
-      };
-    } catch (error) {
-      return toToolError(error);
-    }
-  }
-);
-
-server.tool(
-  "save_trade_orders",
-  "保存或更新我的交易单信息（全量覆盖）。挂单若跨自然日会自动失效。",
-  {
-    orders: z.array(portfolioOrderSchema).describe("交易单列表")
-  },
-  async ({ orders }) => {
-    try {
-      const result = await runTool(
-        "save_trade_orders",
-        { ordersCount: orders.length },
-        async () => saveOrders(orders)
       );
       return {
         content: [
