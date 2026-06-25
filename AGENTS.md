@@ -97,6 +97,7 @@
 - 目录：`image-view-mcp/`
 - 技术栈：Node.js ESM + TypeScript，MCP SDK，DashScope 百炼多模态同步接口。
 - 常用命令：
+  - `npm ci`：首次检出、缺少 `node_modules/` 或本地找不到 `tsc` 时，按 `package-lock.json` 安装依赖。
   - `npm run check`：TypeScript 类型检查。
   - `npm test`：运行 Node 测试。
   - `npm run build`：构建到 `dist/`。
