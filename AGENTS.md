@@ -30,6 +30,23 @@
 - `sector_list` 依赖本机 `python3` 和 `akshare` 包，可通过 `AKSHARE_PYTHON_BIN` 指定虚拟环境解释器。
 - `xueqiu` 数据源优先使用 `XUEQIU_COOKIE`；未配置时会尝试 Playwright 自动获取 Cookie。
 
+## etf-alert-mcp
+
+- 目录：`etf-alert-mcp/`
+- 来源：从 Z-Tools 迁入并统一为 `etf-alert-mcp` 命名；仍通过 Z-Tools 后端 `/mcp/etfTradeAlert/...` 接口管理 ETF 交易提醒。
+- 技术栈：Node.js ESM + TypeScript，MCP SDK，`fetch` 调后端 API。
+- 常用命令：
+  - `npm install`：安装依赖。
+  - `npm test`：运行 Node 测试。
+  - `npm run build`：构建到 `dist/`。
+  - `node dist/index.js`：启动 stdio MCP Server。
+- 环境变量：
+  - `ETF_ALERT_MCP_BACKEND_BASE_URL` 默认 `http://localhost:8082`
+  - `ETF_ALERT_MCP_API_KEY` 必填，对应后端 `GO_API_MCP_API_KEY`
+- MCP 客户端配置时应指向 `/home/zhangjianyong/project/z-mcp/etf-alert-mcp/dist/index.js`。
+- 该模块不直连 MySQL，只通过后端 MCP API 读写数据，用户归属由后端 `GO_API_MCP_USER_ID` 决定；Agent 创建提醒时如未传 `notifyType`，MCP 默认使用 `feishu`。
+- 到价检查和通知触发由 Z-Tools Go 后端定时任务负责：后端每分钟检查 active/enabled 的 ETF 交易提醒，读取东方财富行情，按 `price_lte` / `price_gte` 判断后发送邮箱或飞书通知，并维护最新价、检查时间、触发时间、触发次数和错误信息。
+
 ## mysql-mcp
 
 - 目录：`mysql-mcp/`

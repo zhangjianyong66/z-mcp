@@ -16,6 +16,7 @@
 - 浏览器自动化（Playwright / CDP）
 - 音乐生成（MiniMax）
 - 小红书只读检索（基于 CDP）
+- ETF 交易提醒 MCP（从 Z-Tools 迁入）
 
 ## 仓库结构
 
@@ -32,6 +33,7 @@ z-mcp/
 ├── playwright-tools/
 ├── search-mcp/
 ├── stock-data-mcp/
+├── etf-alert-mcp/
 ├── todo-mcp/
 ├── video-mcp/
 └── xiaohongshu-mcp/
@@ -46,6 +48,7 @@ z-mcp/
 | `video-mcp` | 首尾帧图生视频 | `generate_video_from_frames` | DashScope API Key | [README](./video-mcp/README.md) |
 | `search-mcp` | 通用联网搜索、财经热点 | `web_search` `finance_hotnews` | 可选阿里/百度密钥 | [README](./search-mcp/README.md) |
 | `stock-data-mcp` | ETF 行情/K 线/分析/列表、行业板块 | `etf_*` `sector_list` | Playwright、Python+akshare（板块） | [README](./stock-data-mcp/README.md) |
+| `etf-alert-mcp` | Z-Tools ETF 交易提醒 MCP | `list_etf_trade_alerts` `get_etf_trade_alert` `create_etf_trade_alert` `update_etf_trade_alert` `delete_etf_trade_alert` | Z-Tools 后端 MCP API Key | [README](./etf-alert-mcp/README.md) |
 | `huawei-phone-push-mcp` | 华为手机推送与记录查询 | `push_to_huawei_phone` `get_push_history` | 推送鉴权码 | [README](./huawei-phone-push-mcp/README.md) |
 | `feishu-mcp` | 飞书群聊管理 | `create_chat` `rename_chat` `delete_chat` 等 | 飞书应用凭证 | [README](./feishu-mcp/README.md) |
 | `todo-mcp` | 计划/任务/子任务管理 | `create_plan` `create_task` `create_subtask` 等 | SQLite 文件路径 | [README](./todo-mcp/README.md) |
@@ -119,6 +122,8 @@ npm start
 - `stock-data-mcp`
   - 常用：`XUEQIU_COOKIE`
   - 可选：`STOCK_DATA_MCP_LOG_FILE` `AKSHARE_PYTHON_BIN`
+- `etf-alert-mcp`
+  - 必需：`ETF_ALERT_MCP_BACKEND_BASE_URL` `ETF_ALERT_MCP_API_KEY`
 - `huawei-phone-push-mcp`
   - 必需：`HUAWEI_PUSH_AUTH_CODE`
 - `feishu-mcp`
@@ -153,6 +158,23 @@ npm start
       "args": ["/absolute/path/to/z-mcp/stock-data-mcp/dist/index.js"],
       "env": {
         "XUEQIU_COOKIE": "xq_a_token=...; xq_r_token=..."
+      }
+    }
+  }
+}
+```
+
+### 示例 1.1：接入 ETF 交易提醒
+
+```json
+{
+  "mcpServers": {
+    "z-tools-etf-alert-mcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/z-mcp/etf-alert-mcp/dist/index.js"],
+      "env": {
+        "ETF_ALERT_MCP_BACKEND_BASE_URL": "http://localhost:8082",
+        "ETF_ALERT_MCP_API_KEY": "replace-with-backend-go-api-mcp-key"
       }
     }
   }
