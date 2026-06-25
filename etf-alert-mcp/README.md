@@ -52,4 +52,6 @@ node dist/index.js
 
 `create_etf_trade_alert` / `update_etf_trade_alert` 的 `notifyType` 可传 `email` 或 `feishu`；省略时 MCP 会默认传 `feishu` 给后端。
 
+`update_etf_trade_alert` 如未传 `enabled`，MCP 会先读取当前提醒并沿用现有启停状态，避免后端布尔零值把提醒误置为停用；后端更新成功但返回空数据时，MCP 会自动重新查询详情并返回确认结果。`delete_etf_trade_alert` 删除成功但后端返回空数据时，MCP 会返回包含 `success`、`operation` 和 `id` 的确认对象。
+
 真实 API Key 只能放在本地环境或 MCP 客户端配置中，不要提交到仓库。

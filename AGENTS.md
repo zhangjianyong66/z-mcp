@@ -45,6 +45,8 @@
   - `ETF_ALERT_MCP_API_KEY` 必填，对应后端 `GO_API_MCP_API_KEY`
 - MCP 客户端配置时应指向 `/home/zhangjianyong/project/z-mcp/etf-alert-mcp/dist/index.js`。
 - 该模块不直连 MySQL，只通过后端 MCP API 读写数据，用户归属由后端 `GO_API_MCP_USER_ID` 决定；Agent 创建提醒时如未传 `notifyType`，MCP 默认使用 `feishu`。
+- `update_etf_trade_alert` 如未传 `enabled`，MCP 会先读取当前提醒并沿用现有启停状态，避免后端布尔零值把提醒误置为停用；后端更新成功但返回空数据时，MCP 会自动重新查询详情并返回确认结果。
+- `delete_etf_trade_alert` 删除成功但后端返回空数据时，MCP 会返回包含 `success`、`operation` 和 `id` 的确认对象，而不是直接暴露 `null`。
 - 到价检查和通知触发由 Z-Tools Go 后端定时任务负责：后端每分钟检查 active/enabled 的 ETF 交易提醒，读取东方财富行情，按 `price_lte` / `price_gte` 判断后发送邮箱或飞书通知，并维护最新价、检查时间、触发时间、触发次数和错误信息。
 
 ## mysql-mcp

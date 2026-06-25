@@ -25,10 +25,32 @@ export function createETFAlertToolHandlers(client: BackendClient): ToolHandlers 
     },
     async update_etf_trade_alert(args) {
       const { id, ...input } = args;
-      return client.update(id, withDefaults(input));
+      const existing = input.enabled === undefined ? await client.get(id) : undefined;
+      const updateInput = withDefaults({
+        ...input,
+        enabled: input.enabled ?? readEnabled(existing),
+      });
+      const result = await client.update(id, updateInput);
+      if (result !== null && result !== undefined) {
+        return result;
+      }
+      return {
+        success: true,
+        operation: "update",
+        id,
+        data: await client.get(id),
+      };
     },
     async delete_etf_trade_alert(args) {
-      return client.delete(args.id);
+      const result = await client.delete(args.id);
+      if (result !== null && result !== undefined) {
+        return result;
+      }
+      return {
+        success: true,
+        operation: "delete",
+        id: args.id,
+      };
     },
   };
 }
@@ -38,6 +60,14 @@ function withDefaults(input: ETFAlertInput): ETFAlertInput {
     ...input,
     notifyType: input.notifyType ?? defaultNotifyType,
   };
+}
+
+function readEnabled(data: unknown): boolean | undefined {
+  if (typeof data !== "object" || data === null || !("enabled" in data)) {
+    return undefined;
+  }
+  const enabled = (data as { enabled: unknown }).enabled;
+  return typeof enabled === "boolean" ? enabled : undefined;
 }
 
 // toMCPTextResult 将后端 JSON 数据序列化为 MCP 文本内容。
